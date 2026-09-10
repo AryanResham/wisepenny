@@ -1,0 +1,7 @@
+secrets.properties
+local.properties
+build/
+.gradle/
+.idea/
+*.iml
+.kotlin/

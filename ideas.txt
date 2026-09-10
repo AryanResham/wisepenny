@@ -1,0 +1,37 @@
+IDEAS / LATER
+=============
+Not in v1. Parked here so they don't get lost.
+
+FILTERING
+- Confidence score on the "is this a bank message" filter instead of yes/no
+- Show messages that landed just below the threshold in a "maybe?" list
+- Swipe left/right on those to narrow or widen the threshold
+- Regex extraction templates for known HDFC formats so the AI is skipped entirely (filter 2)
+
+LEARNING / USER CONTEXT
+- Log every correction: what the app guessed, what the user changed it to, how many times
+- Summarize repeated corrections into a short user profile ("small UPI payments to people = Misc")
+- Feed that profile to the AI along with the last N corrections
+- Wider built-in merchant list so common shops never need the AI
+
+LOCATION
+- Save last-known location with every transaction from day one (cheap, no GPS wake)
+- Later: send it to the AI as extra context for categorization
+- Pattern idea: Rs 50 near a train station at 9am to a random UPI id = travel
+- Option: send place type ("near a station") instead of raw coordinates
+
+AI COST / SPEED
+- Batch many pending messages into one AI call when there's a backlog
+- Daily cap on AI calls so a bad loop can't burn the quota
+
+DATA
+- Export / backup to a file
+- Manual cash entry
+- Multi-bank support (SBI, ICICI, etc.)
+
+DASHBOARD (from design doc)
+- Desktop view over WebRTC, QR code to connect, nothing stored on the computer
+- Spending trends and reports
+
+ONBOARDING
+- Per-brand battery optimization guides (OnePlus, Xiaomi, Oppo) if this ever goes beyond personal use
