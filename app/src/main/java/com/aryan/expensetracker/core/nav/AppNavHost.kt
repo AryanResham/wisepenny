@@ -1,7 +1,5 @@
 package com.aryan.expensetracker.core.nav
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -9,13 +7,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.aryan.expensetracker.feature.categories.CategoriesScreen
+import com.aryan.expensetracker.feature.review.ReviewScreen
+import com.aryan.expensetracker.feature.transactions.TransactionsScreen
 
 object Routes {
     const val TRANSACTIONS: String = "transactions"
@@ -54,9 +54,9 @@ fun AppNavHost() {
             startDestination = Routes.TRANSACTIONS,
             modifier = Modifier.padding(padding),
         ) {
-            for ((route, label) in DESTINATIONS) {
-                composable(route) { PlaceholderScreen(label) }
-            }
+            composable(Routes.TRANSACTIONS) { TransactionsScreen() }
+            composable(Routes.REVIEW) { ReviewScreen() }
+            composable(Routes.CATEGORIES) { CategoriesScreen() }
         }
     }
 }
@@ -68,12 +68,5 @@ private fun navigateToTab(navController: NavController, route: String) {
         popUpTo(Routes.TRANSACTIONS) { saveState = true }
         launchSingleTop = true
         restoreState = true
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(label: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(label)
     }
 }
