@@ -3,15 +3,23 @@ package com.aryan.expensetracker.core
 import android.content.Context
 import android.net.ConnectivityManager
 import androidx.room.Room
+import com.aryan.expensetracker.BuildConfig
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.AppDatabase
+import com.aryan.expensetracker.core.llm.GeminiClient
+import com.aryan.expensetracker.core.llm.LlmClient
 import com.aryan.expensetracker.core.net.NetworkChecker
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.feature.categories.CategoryDao
 import com.aryan.expensetracker.feature.transactions.TransactionDao
 import com.aryan.expensetracker.pipeline.capture.PendingMessageDao
 import com.aryan.expensetracker.pipeline.capture.ProcessedMessageDao
+import com.aryan.expensetracker.pipeline.categorization.LlmCategorizer
+import com.aryan.expensetracker.pipeline.categorization.LocalCategorizer
+import com.aryan.expensetracker.pipeline.categorization.MerchantNormalizer
 import com.aryan.expensetracker.pipeline.categorization.MerchantRuleDao
+import com.aryan.expensetracker.pipeline.dedup.DuplicateChecker
+import com.aryan.expensetracker.pipeline.extraction.LlmExtractor
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -40,6 +48,13 @@ class AppContainer(context: Context) {
     )
 
     val appPrefs: AppPrefs = AppPrefs(context)
+
+    val llmClient: LlmClient = GeminiClient(httpClient, appPrefs, BuildConfig.GEMINI_API_KEY, json)
+    val llmExtractor: LlmExtractor = LlmExtractor(llmClient, json)
+    val merchantNormalizer: MerchantNormalizer = MerchantNormalizer(AppConfig.MERCHANT_NOISE_WORDS)
+    val localCategorizer: LocalCategorizer = LocalCategorizer(merchantRuleDao)
+    val llmCategorizer: LlmCategorizer = LlmCategorizer(llmClient, categoryDao, merchantRuleDao, json)
+    val duplicateChecker: DuplicateChecker = DuplicateChecker(transactionDao)
 
     // later tasks add the gemini client, the keyword filter and the pipeline here
 }
