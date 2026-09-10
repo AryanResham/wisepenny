@@ -6,12 +6,17 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.aryan.expensetracker.core.db.entity.PendingMessageEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PendingMessageDao {
 
     @Query("SELECT * FROM pending_messages ORDER BY receivedAt ASC")
     suspend fun getAll(): List<PendingMessageEntity>
+
+    // feeds the status strip, so a queue that stops draining is visible without opening the db
+    @Query("SELECT COUNT(*) FROM pending_messages")
+    fun observeCount(): Flow<Int>
 
     // IGNORE, not REPLACE: a re-delivered sms must not reset attemptCount
     @Insert(onConflict = OnConflictStrategy.IGNORE)
