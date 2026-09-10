@@ -54,7 +54,8 @@ SIMPLE BEATS CLEVER. A slightly slower app with obvious code is the goal.
 - If a plain `if` works, do not build a sealed hierarchy or a strategy pattern.
 - Guard clauses first. `if (bad) return` at the top. Never nested if/else towers.
 - Functions are short (10-40 lines), do one thing, and are named with a verb: `readInbox`, `enqueueMessage`, `categorizeMerchant`.
-- 1-3 parameters. If you need more, pass a small data class.
+- 1-3 parameters for functions. If you need more, pass a small data class. Constructors of wiring
+  classes (things built once in AppContainer) may take as many collaborators as they need.
 - Anything that can fail returns a result, not an exception. Use one shape across the project:
   a sealed `Result`-style type with Success(data) and Failure(reason). Callers check it and return early.
 - Wrap I/O and network in try/catch at the boundary where it happens. Do not let exceptions travel upward.
