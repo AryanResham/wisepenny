@@ -5,10 +5,14 @@ import android.net.ConnectivityManager
 import androidx.room.Room
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.AppDatabase
+import com.aryan.expensetracker.core.location.LocationProvider
 import com.aryan.expensetracker.core.net.NetworkChecker
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.feature.categories.CategoryDao
 import com.aryan.expensetracker.feature.transactions.TransactionDao
+import com.aryan.expensetracker.pipeline.capture.BankMessageFilter
+import com.aryan.expensetracker.pipeline.capture.InboxReader
+import com.aryan.expensetracker.pipeline.capture.MessageCapture
 import com.aryan.expensetracker.pipeline.capture.PendingMessageDao
 import com.aryan.expensetracker.pipeline.capture.ProcessedMessageDao
 import com.aryan.expensetracker.pipeline.categorization.MerchantRuleDao
@@ -40,6 +44,21 @@ class AppContainer(context: Context) {
     )
 
     val appPrefs: AppPrefs = AppPrefs(context)
+
+    val bankMessageFilter: BankMessageFilter = BankMessageFilter()
+
+    val locationProvider: LocationProvider = LocationProvider(context.applicationContext)
+
+    val messageCapture: MessageCapture = MessageCapture(
+        pendingMessageDao,
+        processedMessageDao,
+        bankMessageFilter,
+        locationProvider,
+        appPrefs,
+        context.applicationContext,
+    )
+
+    val inboxReader: InboxReader = InboxReader(context.applicationContext, messageCapture, appPrefs)
 
     // later tasks add the gemini client, the keyword filter and the pipeline here
 }

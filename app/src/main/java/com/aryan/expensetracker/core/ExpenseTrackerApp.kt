@@ -5,6 +5,7 @@ import android.util.Log
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
 import com.aryan.expensetracker.feature.categories.CategoryDao
+import com.aryan.expensetracker.pipeline.MessageProcessingScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,6 +30,11 @@ class ExpenseTrackerApp : Application() {
             } catch (error: Exception) {
                 Log.e(TAG, "category seeding failed: ${error.javaClass.simpleName}")
             }
+        }
+        // catches up on sms that arrived while the app was not running, then kicks the worker
+        scope.launch {
+            container.inboxReader.catchUp()
+            MessageProcessingScheduler.enqueue(this@ExpenseTrackerApp)
         }
     }
 }
