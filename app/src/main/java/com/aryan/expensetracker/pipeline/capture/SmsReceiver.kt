@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
 import com.aryan.expensetracker.core.ExpenseTrackerApp
+import com.aryan.expensetracker.pipeline.MessageProcessingScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,12 +32,13 @@ class SmsReceiver : BroadcastReceiver() {
         val sender = parts[0].displayOriginatingAddress.orEmpty()
         val receivedAt = parts[0].timestampMillis
 
-        // goAsync keeps the process alive past onReceive so the insert can finish
+        // goAsync keeps the process alive past onReceive; everything after it must finish the result
         val pendingResult = goAsync()
-        val messageCapture = (context.applicationContext as ExpenseTrackerApp).container.messageCapture
         scope.launch {
             try {
-                messageCapture.capture(sender, body, receivedAt)
+                val container = (context.applicationContext as ExpenseTrackerApp).container
+                container.messageCapture.capture(sender, body, receivedAt)
+                MessageProcessingScheduler.enqueue(context.applicationContext)
             } catch (error: Exception) {
                 Log.e(TAG, "receive failed: ${error.javaClass.simpleName}")
             } finally {

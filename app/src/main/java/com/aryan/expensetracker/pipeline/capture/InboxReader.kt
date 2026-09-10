@@ -6,6 +6,7 @@ import android.util.Log
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.core.result.AppResult
+import com.aryan.expensetracker.pipeline.MessageProcessingScheduler
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "InboxReader"
@@ -24,13 +25,24 @@ class InboxReader(
 ) {
 
     // first run only: walk the recent past so the app starts with history instead of nothing
-    suspend fun backfill(): AppResult<Int> {
-        val windowMillis = TimeUnit.DAYS.toMillis(AppConfig.BACKFILL_DAYS.toLong())
-        return readSince(System.currentTimeMillis() - windowMillis)
-    }
+    suspend fun backfill(): AppResult<Int> = readAndSchedule(oldestReadableTime())
 
     // every launch: pick up what arrived while the app was not running to receive it
-    suspend fun catchUp(): AppResult<Int> = readSince(appPrefs.getLastSeenSmsAt())
+    suspend fun catchUp(): AppResult<Int> {
+        // before onboarding the read mark is still 0, and catching up would scan the whole inbox
+        if (!appPrefs.isBackfillDone()) return AppResult.Success(0)
+        return readAndSchedule(maxOf(appPrefs.getLastSeenSmsAt(), oldestReadableTime()))
+    }
+
+    // one worker run per scan, not per message, and it runs even if the scan died half way
+    private suspend fun readAndSchedule(sinceMillis: Long): AppResult<Int> {
+        val result = readSince(sinceMillis)
+        MessageProcessingScheduler.enqueue(context)
+        return result
+    }
+
+    private fun oldestReadableTime(): Long =
+        System.currentTimeMillis() - TimeUnit.DAYS.toMillis(AppConfig.BACKFILL_DAYS.toLong())
 
     // reads oldest first so lastSeenSmsAt only ever moves forward; returns how many rows it looked at
     private suspend fun readSince(sinceMillis: Long): AppResult<Int> {

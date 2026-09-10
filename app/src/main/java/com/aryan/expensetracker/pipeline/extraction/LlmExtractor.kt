@@ -11,9 +11,6 @@ import java.time.format.DateTimeParseException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-private const val SOURCE_LLM = "LLM"
-private const val ACCOUNT_TAIL_LENGTH = 4
-
 private const val SYSTEM_INSTRUCTION = """
 You read SMS messages from Indian banks and return structured data about the transaction they describe.
 
@@ -53,8 +50,13 @@ class LlmExtractor(private val llmClient: LlmClient, private val json: Json) {
         if (!parsed.isTransaction) return ExtractionOutcome.NotATransaction
 
         val draft = toDraft(parsed, receivedAt) ?: return ExtractionOutcome.Failed("incomplete fields")
+        // a stray "debit" would quietly miss every direction-keyed rule and dedup lookup
+        if (!isAllowedDirection(draft.direction)) return ExtractionOutcome.Failed("bad direction")
         return ExtractionOutcome.Transaction(draft)
     }
+
+    private fun isAllowedDirection(direction: String): Boolean =
+        direction == AppConfig.DIRECTION_DEBIT || direction == AppConfig.DIRECTION_CREDIT
 
     private fun parseResponse(responseText: String): ExtractionJson? {
         return try {
@@ -76,9 +78,9 @@ class LlmExtractor(private val llmClient: LlmClient, private val json: Json) {
             direction = direction,
             merchantRaw = merchant.trim(),
             referenceNumber = parsed.referenceNumber,
-            accountTail = parsed.accountTail?.takeLast(ACCOUNT_TAIL_LENGTH),
+            accountTail = parsed.accountTail?.takeLast(AppConfig.ACCOUNT_TAIL_LENGTH),
             occurredAt = parseBankDate(parsed.occurredOn, receivedAt),
-            source = SOURCE_LLM,
+            source = AppConfig.RULE_SOURCE_LLM,
         )
     }
 

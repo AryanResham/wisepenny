@@ -6,10 +6,15 @@ import android.util.Log
 
 private const val TAG = "NetworkChecker"
 
-class NetworkChecker(private val connectivityManager: ConnectivityManager) {
+// an interface so the pipeline's tests can go offline without a device
+fun interface NetworkChecker {
+    fun isOnline(): Boolean
+}
+
+class AndroidNetworkChecker(private val connectivityManager: ConnectivityManager) : NetworkChecker {
 
     // true only when the active network actually reaches the internet, not merely connected
-    fun isOnline(): Boolean {
+    override fun isOnline(): Boolean {
         return try {
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false

@@ -3,16 +3,20 @@ package com.aryan.expensetracker.core
 import android.content.Context
 import android.net.ConnectivityManager
 import androidx.room.Room
+import androidx.room.withTransaction
 import com.aryan.expensetracker.BuildConfig
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.AppDatabase
 import com.aryan.expensetracker.core.llm.GeminiClient
 import com.aryan.expensetracker.core.llm.LlmClient
 import com.aryan.expensetracker.core.location.LocationProvider
+import com.aryan.expensetracker.core.net.AndroidNetworkChecker
 import com.aryan.expensetracker.core.net.NetworkChecker
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.feature.categories.CategoryDao
 import com.aryan.expensetracker.feature.transactions.TransactionDao
+import com.aryan.expensetracker.pipeline.DatabaseWriter
+import com.aryan.expensetracker.pipeline.MessagePipeline
 import com.aryan.expensetracker.pipeline.capture.BankMessageFilter
 import com.aryan.expensetracker.pipeline.capture.InboxReader
 import com.aryan.expensetracker.pipeline.capture.MessageCapture
@@ -33,7 +37,7 @@ class AppContainer(context: Context) {
     val json: Json = Json { ignoreUnknownKeys = true }
 
     // v1 accepts data loss on a schema change; there is nothing to migrate yet
-    private val database: AppDatabase = Room.databaseBuilder(
+    val database: AppDatabase = Room.databaseBuilder(
         context, AppDatabase::class.java, AppConfig.DATABASE_NAME
     ).fallbackToDestructiveMigration(dropAllTables = true).build()
 
@@ -47,7 +51,7 @@ class AppContainer(context: Context) {
         .callTimeout(AppConfig.GEMINI_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
-    val networkChecker: NetworkChecker = NetworkChecker(
+    val networkChecker: NetworkChecker = AndroidNetworkChecker(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     )
 
@@ -63,7 +67,6 @@ class AppContainer(context: Context) {
         bankMessageFilter,
         locationProvider,
         appPrefs,
-        context.applicationContext,
     )
 
     val inboxReader: InboxReader = InboxReader(context.applicationContext, messageCapture, appPrefs)
@@ -75,5 +78,17 @@ class AppContainer(context: Context) {
     val llmCategorizer: LlmCategorizer = LlmCategorizer(llmClient, categoryDao, merchantRuleDao, json)
     val duplicateChecker: DuplicateChecker = DuplicateChecker(transactionDao)
 
-    // later tasks add the pipeline here
+    val databaseWriter: DatabaseWriter = DatabaseWriter { block -> database.withTransaction(block) }
+
+    val messagePipeline: MessagePipeline = MessagePipeline(
+        transactionDao,
+        processedMessageDao,
+        networkChecker,
+        llmExtractor,
+        merchantNormalizer,
+        localCategorizer,
+        llmCategorizer,
+        duplicateChecker,
+        databaseWriter,
+    )
 }

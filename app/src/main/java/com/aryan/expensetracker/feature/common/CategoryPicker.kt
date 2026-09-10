@@ -7,6 +7,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
 
 // the one category picker; scrolls sideways so a long category list never pushes buttons off screen
@@ -21,4 +22,17 @@ fun CategoryPicker(categories: List<CategoryEntity>, selectedId: Long?, onPick: 
             )
         }
     }
+}
+
+// a debit can only be an expense and a credit only income, so the picker never offers both
+fun categoriesForDirection(
+    categories: List<CategoryEntity>,
+    direction: String,
+): List<CategoryEntity> {
+    val kind = if (direction == AppConfig.DIRECTION_CREDIT) {
+        AppConfig.CATEGORY_KIND_INCOME
+    } else {
+        AppConfig.CATEGORY_KIND_EXPENSE
+    }
+    return categories.filter { it.kind == kind }
 }

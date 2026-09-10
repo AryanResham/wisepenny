@@ -5,15 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aryan.expensetracker.core.AppContainer
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
-import com.aryan.expensetracker.core.db.entity.MerchantRuleEntity
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
+import com.aryan.expensetracker.feature.common.rememberMerchant
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val TAG = "ReviewViewModel"
-private const val RULE_SOURCE_USER = "USER"
 
 class ReviewViewModel(private val container: AppContainer) : ViewModel() {
 
@@ -37,7 +36,12 @@ class ReviewViewModel(private val container: AppContainer) : ViewModel() {
                 container.transactionDao.update(
                     transaction.copy(categoryId = categoryId, needsReview = false, reviewReason = null)
                 )
-                rememberMerchant(transaction, categoryId)
+                rememberMerchant(
+                    container.merchantRuleDao,
+                    transaction.merchantNormalized,
+                    transaction.direction,
+                    categoryId,
+                )
             } catch (error: Exception) {
                 Log.e(TAG, "confirm failed: ${error.javaClass.simpleName}")
             }
@@ -52,19 +56,5 @@ class ReviewViewModel(private val container: AppContainer) : ViewModel() {
                 Log.e(TAG, "discard failed: ${error.javaClass.simpleName}")
             }
         }
-    }
-
-    // this write is the learning loop: after it the merchant never needs the model again
-    private suspend fun rememberMerchant(transaction: TransactionEntity, categoryId: Long) {
-        if (transaction.merchantNormalized.isBlank()) return
-        container.merchantRuleDao.upsert(
-            MerchantRuleEntity(
-                normalizedMerchant = transaction.merchantNormalized,
-                direction = transaction.direction,
-                categoryId = categoryId,
-                source = RULE_SOURCE_USER,
-                updatedAt = System.currentTimeMillis(),
-            )
-        )
     }
 }

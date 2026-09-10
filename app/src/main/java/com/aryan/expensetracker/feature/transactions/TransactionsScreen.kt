@@ -26,15 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.aryan.expensetracker.core.ExpenseTrackerApp
-import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
 import com.aryan.expensetracker.core.money.formatPaise
 import com.aryan.expensetracker.feature.common.CategoryPicker
+import com.aryan.expensetracker.feature.common.categoriesForDirection
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -52,10 +53,17 @@ fun TransactionsScreen() {
     val transactions by viewModel.transactions.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
+    val lastSeenSmsAt by viewModel.lastSeenSmsAt.collectAsState()
     var editing by remember { mutableStateOf<TransactionEntity?>(null) }
 
+    // the capture mark lives in prefs, so it is re-read each time this screen comes forward
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshStatus()
+        onPauseOrDispose {}
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        StatusStrip(viewModel.lastSeenSmsAt, pendingCount)
+        StatusStrip(lastSeenSmsAt, pendingCount)
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             for ((day, rows) in groupByDay(transactions)) {
                 item(key = day) { DayHeader(day) }
@@ -163,17 +171,4 @@ private fun describeLastSeen(epochMillis: Long): String {
 private fun categoryName(categories: List<CategoryEntity>, categoryId: Long?): String {
     if (categoryId == null) return "Uncategorized"
     return categories.firstOrNull { it.id == categoryId }?.name ?: "Uncategorized"
-}
-
-// a debit can only be an expense and a credit only income, so the picker never offers both
-private fun categoriesForDirection(
-    categories: List<CategoryEntity>,
-    direction: String,
-): List<CategoryEntity> {
-    val kind = if (direction == AppConfig.DIRECTION_CREDIT) {
-        AppConfig.CATEGORY_KIND_INCOME
-    } else {
-        AppConfig.CATEGORY_KIND_EXPENSE
-    }
-    return categories.filter { it.kind == kind }
 }

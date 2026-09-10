@@ -1,12 +1,10 @@
 package com.aryan.expensetracker.pipeline.capture
 
-import android.content.Context
 import android.util.Log
 import com.aryan.expensetracker.core.db.entity.PendingMessageEntity
 import com.aryan.expensetracker.core.location.LocationProvider
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.core.result.AppResult
-import com.aryan.expensetracker.pipeline.MessageProcessingScheduler
 
 private const val TAG = "MessageCapture"
 
@@ -18,13 +16,29 @@ class MessageCapture(
     private val bankMessageFilter: BankMessageFilter,
     private val locationProvider: LocationProvider,
     private val appPrefs: AppPrefs,
-    private val appContext: Context,
 ) {
 
     // the one door into the queue, used by both the receiver and the inbox reader; never throws
     suspend fun capture(sender: String, body: String, receivedAt: Long): AppResult<CaptureOutcome> {
+        val result = queueIfBankMessage(sender, body, receivedAt)
+
+        // the read mark moves for every sms we finished looking at, filtered or not, so catch-up
+        // never rescans junk; a failed capture leaves it alone so the message comes back
+        if (result is AppResult.Success && receivedAt > appPrefs.getLastSeenSmsAt()) {
+            appPrefs.setLastSeenSmsAt(receivedAt)
+        }
+        return result
+    }
+
+    private suspend fun queueIfBankMessage(
+        sender: String,
+        body: String,
+        receivedAt: Long,
+    ): AppResult<CaptureOutcome> {
         // Step 1: drop everything that is not a bank money message
-        if (!bankMessageFilter.looksLikeBankMessage(sender, body)) return AppResult.Success(CaptureOutcome.SKIPPED)
+        if (!bankMessageFilter.looksLikeBankMessage(sender, body)) {
+            return AppResult.Success(CaptureOutcome.SKIPPED)
+        }
 
         return try {
             // Step 2: a message a past run already finished with must not be queued again
@@ -44,11 +58,6 @@ class MessageCapture(
                     longitude = location?.longitude,
                 )
             )
-
-            // Step 4: move the read mark forward so the next catch-up starts here
-            if (receivedAt > appPrefs.getLastSeenSmsAt()) appPrefs.setLastSeenSmsAt(receivedAt)
-
-            MessageProcessingScheduler.enqueue(appContext)
             AppResult.Success(CaptureOutcome.QUEUED)
         } catch (error: Exception) {
             Log.e(TAG, "capture failed: ${error.javaClass.simpleName}")

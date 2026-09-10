@@ -45,6 +45,17 @@ object AppConfig {
     const val DIRECTION_DEBIT: String = "DEBIT"
     const val DIRECTION_CREDIT: String = "CREDIT"
 
+    // who decided a row: the model, or the user correcting it afterwards
+    const val RULE_SOURCE_LLM: String = "LLM"
+    const val RULE_SOURCE_USER: String = "USER"
+
+    const val ACCOUNT_TAIL_LENGTH: Int = 4
+
+    // what a finished message left behind, so a re-delivered sms is recognised and skipped
+    const val PROCESSED_SAVED: String = "SAVED"
+    const val PROCESSED_IGNORED: String = "IGNORED"
+    const val PROCESSED_SUPERSEDED: String = "SUPERSEDED"
+
     const val CATEGORY_KIND_EXPENSE: String = "EXPENSE"
     const val CATEGORY_KIND_INCOME: String = "INCOME"
 

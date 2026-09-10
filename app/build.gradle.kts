@@ -50,6 +50,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // android.util.Log is a stub off-device; without this every logging line fails a unit test
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
 }
 
 kotlin {

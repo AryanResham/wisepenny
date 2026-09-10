@@ -26,12 +26,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.aryan.expensetracker.core.ExpenseTrackerApp
-import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
 import com.aryan.expensetracker.core.db.entity.ReviewReason
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
 import com.aryan.expensetracker.core.money.formatPaise
 import com.aryan.expensetracker.feature.common.CategoryPicker
+import com.aryan.expensetracker.feature.common.categoriesForDirection
 
 @Composable
 fun ReviewScreen() {
@@ -105,19 +105,6 @@ private fun explainReason(transaction: TransactionEntity): String = when (transa
     ReviewReason.NEW_MERCHANT -> "First time seeing this merchant"
     ReviewReason.LLM_EXTRACTED -> "Read by AI, no local rule matched"
     ReviewReason.NO_REFERENCE_NUMBER -> "No reference number, could not check for duplicates"
-    ReviewReason.COULD_NOT_PROCESS -> "Could not be read automatically"
+    ReviewReason.COULD_NOT_PROCESS -> "Could not be read after several tries"
     else -> "Needs a category"
-}
-
-// a debit can only be an expense and a credit only income, so the picker never offers both
-private fun categoriesForDirection(
-    categories: List<CategoryEntity>,
-    direction: String,
-): List<CategoryEntity> {
-    val kind = if (direction == AppConfig.DIRECTION_CREDIT) {
-        AppConfig.CATEGORY_KIND_INCOME
-    } else {
-        AppConfig.CATEGORY_KIND_EXPENSE
-    }
-    return categories.filter { it.kind == kind }
 }

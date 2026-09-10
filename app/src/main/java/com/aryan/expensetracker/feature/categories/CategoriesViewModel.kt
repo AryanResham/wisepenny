@@ -3,6 +3,7 @@ package com.aryan.expensetracker.feature.categories
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.aryan.expensetracker.core.AppContainer
 import com.aryan.expensetracker.core.db.entity.CategoryEntity
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,7 +46,7 @@ class CategoriesViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    // Step 1: move the money, Step 2: drop rules pointing at a dead category, Step 3: delete it
+    // all three writes or none: a half-done delete would leave rules pointing at a dead category
     fun delete(category: CategoryEntity, moveTransactionsTo: Long) {
         if (moveTransactionsTo == category.id) return
         if (categories.value.count { it.kind == category.kind } <= 1) {
@@ -54,9 +55,11 @@ class CategoriesViewModel(private val container: AppContainer) : ViewModel() {
         }
         viewModelScope.launch {
             try {
-                container.transactionDao.reassignCategory(category.id, moveTransactionsTo)
-                container.merchantRuleDao.deleteByCategory(category.id)
-                container.categoryDao.delete(category)
+                container.database.withTransaction {
+                    container.transactionDao.reassignCategory(category.id, moveTransactionsTo)
+                    container.merchantRuleDao.deleteByCategory(category.id)
+                    container.categoryDao.delete(category)
+                }
             } catch (error: Exception) {
                 Log.e(TAG, "delete category failed: ${error.javaClass.simpleName}")
             }

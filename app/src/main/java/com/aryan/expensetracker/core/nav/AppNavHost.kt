@@ -38,21 +38,25 @@ private val DESTINATIONS = listOf(
 fun AppNavHost() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route ?: Routes.TRANSACTIONS
     // onboarding only opens while a required permission is missing; after that it is never the entry point
     val context = LocalContext.current
     val startRoute = remember { if (hasRequiredPermissions(context)) Routes.TRANSACTIONS else Routes.ONBOARDING }
+    // the first frame has no back stack entry yet, so the start route stands in for it
+    val currentRoute = backStackEntry?.destination?.route ?: startRoute
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                for ((route, label) in DESTINATIONS) {
-                    NavigationBarItem(
-                        selected = route == currentRoute,
-                        onClick = { navigateToTab(navController, route) },
-                        icon = {},
-                        label = { Text(label) },
-                    )
+            // no tabs during onboarding: they would let the user walk past the permission grant
+            if (currentRoute != Routes.ONBOARDING) {
+                NavigationBar {
+                    for ((route, label) in DESTINATIONS) {
+                        NavigationBarItem(
+                            selected = route == currentRoute,
+                            onClick = { navigateToTab(navController, route) },
+                            icon = {},
+                            label = { Text(label) },
+                        )
+                    }
                 }
             }
         }
