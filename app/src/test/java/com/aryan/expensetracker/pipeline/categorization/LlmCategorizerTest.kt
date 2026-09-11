@@ -21,7 +21,7 @@ private val TRAVEL = CategoryEntity(2L, "Travel", AppConfig.CATEGORY_KIND_EXPENS
 private val INCOME = CategoryEntity(3L, "Income", AppConfig.CATEGORY_KIND_INCOME, true, 2)
 
 // records the prompt so a test can prove which category names actually left the phone
-private class FakeLlmClient(private val responseText: String) : LlmClient {
+private class FakeLlmClient(private val response: AppResult<String>) : LlmClient {
     var lastUserText: String = ""
 
     override suspend fun generateJson(
@@ -30,9 +30,11 @@ private class FakeLlmClient(private val responseText: String) : LlmClient {
         responseSchema: String,
     ): AppResult<String> {
         lastUserText = userText
-        return AppResult.Success(responseText)
+        return response
     }
 }
+
+private fun clientAnswering(responseText: String) = FakeLlmClient(AppResult.Success(responseText))
 
 private class FakeCategoryDao(private val categories: List<CategoryEntity>) : CategoryDao {
     override fun observeAll(): Flow<List<CategoryEntity>> = flowOf(categories)
@@ -73,33 +75,46 @@ class LlmCategorizerTest {
             json,
         )
 
+    private suspend fun categoryIdFrom(categorizer: LlmCategorizer, merchant: String, direction: String) =
+        (categorizer.categoryIdFor(merchant, direction) as AppResult.Success).data
+
     @Test
     fun mapsChosenNameToItsId() = runTest {
-        val categorizer = categorizerUsing(FakeLlmClient("""{"category":"Food"}"""))
+        val categorizer = categorizerUsing(clientAnswering("""{"category":"Food"}"""))
 
-        assertEquals(FOOD.id, categorizer.categoryIdFor("SWIGGY", AppConfig.DIRECTION_DEBIT))
+        assertEquals(FOOD.id, categoryIdFrom(categorizer, "SWIGGY", AppConfig.DIRECTION_DEBIT))
     }
 
     @Test
     fun returnsNullForAnUnknownName() = runTest {
-        val categorizer = categorizerUsing(FakeLlmClient("""{"category":"Nonsense"}"""))
+        val categorizer = categorizerUsing(clientAnswering("""{"category":"Nonsense"}"""))
 
-        assertNull(categorizer.categoryIdFor("SWIGGY", AppConfig.DIRECTION_DEBIT))
+        assertNull(categoryIdFrom(categorizer, "SWIGGY", AppConfig.DIRECTION_DEBIT))
     }
 
     @Test
     fun returnsNullWhenTheModelDeclines() = runTest {
-        val categorizer = categorizerUsing(FakeLlmClient("""{"category":null}"""))
+        val categorizer = categorizerUsing(clientAnswering("""{"category":null}"""))
 
-        assertNull(categorizer.categoryIdFor("SOME NEW SHOP", AppConfig.DIRECTION_DEBIT))
+        assertNull(categoryIdFrom(categorizer, "SOME NEW SHOP", AppConfig.DIRECTION_DEBIT))
+    }
+
+    // the reason has to survive the call, or the pipeline has nothing to log
+    @Test
+    fun aClientFailureComesBackWithItsReason() = runTest {
+        val categorizer = categorizerUsing(FakeLlmClient(AppResult.Failure("http 503")))
+
+        val result = categorizer.categoryIdFor("SWIGGY", AppConfig.DIRECTION_DEBIT)
+
+        assertEquals("http 503", (result as AppResult.Failure).reason)
     }
 
     @Test
     fun creditOnlySeesIncomeCategories() = runTest {
-        val client = FakeLlmClient("""{"category":"Income"}""")
+        val client = clientAnswering("""{"category":"Income"}""")
         val categorizer = categorizerUsing(client)
 
-        assertEquals(INCOME.id, categorizer.categoryIdFor("ACME PAYROLL", AppConfig.DIRECTION_CREDIT))
+        assertEquals(INCOME.id, categoryIdFrom(categorizer, "ACME PAYROLL", AppConfig.DIRECTION_CREDIT))
         assertTrue(client.lastUserText.contains("Income"))
         assertFalse(client.lastUserText.contains("Food"))
         assertFalse(client.lastUserText.contains("Travel"))

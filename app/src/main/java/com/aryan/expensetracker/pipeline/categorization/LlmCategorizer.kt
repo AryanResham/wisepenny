@@ -28,13 +28,13 @@ class LlmCategorizer(
     private val json: Json,
 ) {
 
-    // only the merchant name and the direction leave the phone; never the body, amount or location
-    suspend fun categoryIdFor(normalizedMerchant: String, direction: String): Long? {
-        if (normalizedMerchant.isBlank()) return null
+    // only the merchant name and direction leave the phone; a failure comes back as a reason to log
+    suspend fun categoryIdFor(normalizedMerchant: String, direction: String): AppResult<Long?> {
+        if (normalizedMerchant.isBlank()) return AppResult.Success(null)
 
         val kind = kindFor(direction)
         val categories = categoryDao.getAll().filter { it.kind == kind }
-        if (categories.isEmpty()) return null
+        if (categories.isEmpty()) return AppResult.Success(null)
 
         val response = llmClient.generateJson(
             SYSTEM_INSTRUCTION,
@@ -42,12 +42,13 @@ class LlmCategorizer(
             GeminiSchemas.CATEGORIZATION,
         )
         val responseText = when (response) {
-            is AppResult.Failure -> return null
+            is AppResult.Failure -> return response
             is AppResult.Success -> response.data
         }
 
-        val chosenName = readChosenCategory(responseText) ?: return null
-        return categories.firstOrNull { it.name.equals(chosenName, ignoreCase = true) }?.id
+        val chosenName = readChosenCategory(responseText) ?: return AppResult.Success(null)
+        val chosenId = categories.firstOrNull { it.name.equals(chosenName, ignoreCase = true) }?.id
+        return AppResult.Success(chosenId)
     }
 
     // past corrections go in as examples; this is the app learning the person, not the shop

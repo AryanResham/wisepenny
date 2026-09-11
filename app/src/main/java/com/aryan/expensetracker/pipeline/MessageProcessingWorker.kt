@@ -16,7 +16,18 @@ private const val TAG = "MessageProcessingWorker"
 private const val STUB_MERCHANT = "Could not process"
 
 // what one pass over the queue left behind; the worker turns it into a WorkManager result
-data class DrainReport(val handled: Int, val stillWaiting: Int)
+data class DrainReport(
+    val saved: Int,
+    val ignored: Int,
+    val waiting: Int,
+    val failed: Int,
+    val gaveUp: Int,
+) {
+    val handled: Int get() = saved + ignored + waiting + failed + gaveUp
+
+    // a failed message is queued for another run, so it keeps the worker retrying just like a wait
+    val stillWaiting: Int get() = waiting + failed
+}
 
 class MessageProcessingWorker(
     context: Context,
@@ -31,7 +42,12 @@ class MessageProcessingWorker(
                 container.transactionDao,
                 container.messagePipeline,
             )
-            Log.i(TAG, "worker handled ${report.handled} messages, ${report.stillWaiting} still queued")
+            // the one log line per run: counts only, and no reason repeated from the pipeline
+            Log.i(
+                TAG,
+                "drained ${report.handled}: saved ${report.saved}, ignored ${report.ignored}, " +
+                    "waiting ${report.waiting}, failed ${report.failed}, gave up ${report.gaveUp}",
+            )
             if (report.stillWaiting > 0) Result.retry() else Result.success()
         } catch (error: Exception) {
             Log.e(TAG, "worker failed: ${error.javaClass.simpleName}")
@@ -47,21 +63,31 @@ suspend fun drainQueue(
     messagePipeline: MessagePipeline,
 ): DrainReport {
     val queue = pendingMessageDao.getAll()
-    var stillWaiting = 0
+    var saved = 0
+    var ignored = 0
+    var waiting = 0
+    var failed = 0
+    var gaveUp = 0
 
     for (message in queue) {
-        when (val outcome = outcomeFor(messagePipeline, message)) {
-            is PipelineOutcome.Saved -> pendingMessageDao.delete(message)
-            is PipelineOutcome.Ignored -> pendingMessageDao.delete(message)
+        when (outcomeFor(messagePipeline, message)) {
+            is PipelineOutcome.Saved -> {
+                pendingMessageDao.delete(message)
+                saved++
+            }
+            is PipelineOutcome.Ignored -> {
+                pendingMessageDao.delete(message)
+                ignored++
+            }
             // being offline is not a failed attempt, so attemptCount is deliberately left alone
-            PipelineOutcome.WaitForNetwork -> stillWaiting++
+            PipelineOutcome.WaitForNetwork -> waiting++
+            // the pipeline already logged why; here the message is only counted
             is PipelineOutcome.Failed -> {
-                Log.w(TAG, "message ${message.id} failed: ${outcome.reason}")
-                if (retryLater(pendingMessageDao, transactionDao, message)) stillWaiting++
+                if (retryLater(pendingMessageDao, transactionDao, message)) failed++ else gaveUp++
             }
         }
     }
-    return DrainReport(queue.size, stillWaiting)
+    return DrainReport(saved, ignored, waiting, failed, gaveUp)
 }
 
 // the pipeline already swallows its own errors; this is the belt to that pair of braces
@@ -89,7 +115,6 @@ private suspend fun retryLater(
 
     transactionDao.insert(stubTransaction(message))
     pendingMessageDao.delete(message)
-    Log.w(TAG, "message ${message.id} gave up after ${message.attemptCount} attempts")
     return false
 }
 

@@ -7,6 +7,7 @@ import com.aryan.expensetracker.core.db.entity.ProcessedMessageEntity
 import com.aryan.expensetracker.core.db.entity.ReviewReason
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
 import com.aryan.expensetracker.core.net.NetworkChecker
+import com.aryan.expensetracker.core.result.AppResult
 import com.aryan.expensetracker.feature.transactions.TransactionDao
 import com.aryan.expensetracker.pipeline.capture.ProcessedMessageDao
 import com.aryan.expensetracker.pipeline.categorization.LlmCategorizer
@@ -77,7 +78,7 @@ class MessagePipeline(
         }
 
         // Step 4: normalize the merchant, then find its category locally before paying for a call
-        val categorization = categorize(draft)
+        val categorization = categorize(draft, message.id)
 
         // Step 5: insert or correct the existing row, and mark the message done in the same write
         val transactionId = store(message, draft, categorization)
@@ -86,18 +87,33 @@ class MessagePipeline(
     }
 
     // a learned rule wins; NEW_MERCHANT beats LLM_EXTRACTED beats NO_REFERENCE_NUMBER, one reason per row
-    private suspend fun categorize(draft: TransactionDraft): Categorization {
+    private suspend fun categorize(draft: TransactionDraft, messageId: Long): Categorization {
         val normalizedMerchant = merchantNormalizer.normalize(draft.merchantRaw)
         val learnedId = localCategorizer.categoryIdFor(normalizedMerchant, draft.direction)
 
         if (learnedId == null) {
-            val guessedId = llmCategorizer.categoryIdFor(normalizedMerchant, draft.direction)
+            val guessedId = guessCategory(normalizedMerchant, draft.direction, messageId)
             return Categorization(normalizedMerchant, guessedId, ReviewReason.NEW_MERCHANT)
         }
         if (draft.referenceNumber.isNullOrBlank()) {
             return Categorization(normalizedMerchant, learnedId, ReviewReason.NO_REFERENCE_NUMBER)
         }
         return Categorization(normalizedMerchant, learnedId, ReviewReason.LLM_EXTRACTED)
+    }
+
+    // a failed guess is logged once here and then treated as no category; the row still gets saved
+    private suspend fun guessCategory(
+        normalizedMerchant: String,
+        direction: String,
+        messageId: Long,
+    ): Long? {
+        return when (val guess = llmCategorizer.categoryIdFor(normalizedMerchant, direction)) {
+            is AppResult.Failure -> {
+                Log.w(TAG, "message $messageId categorization failed: ${guess.reason}")
+                null
+            }
+            is AppResult.Success -> guess.data
+        }
     }
 
     // one transaction so a half-written replace can never lose the message's tombstone

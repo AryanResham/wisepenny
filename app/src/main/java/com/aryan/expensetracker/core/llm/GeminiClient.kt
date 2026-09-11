@@ -1,6 +1,5 @@
 package com.aryan.expensetracker.core.llm
 
-import android.util.Log
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.core.result.AppResult
@@ -18,7 +17,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-private const val TAG = "GeminiClient"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
 class GeminiClient(
@@ -33,37 +31,25 @@ class GeminiClient(
         userText: String,
         responseSchema: String,
     ): AppResult<String> = withContext(Dispatchers.IO) {
+        // every failure below leaves as a reason; the pipeline is the one place that logs it
         // Step 1: a missing secrets.properties must degrade, never crash
-        if (apiKey.isBlank()) {
-            Log.e(TAG, "no api key configured")
-            return@withContext AppResult.Failure("no api key")
-        }
+        if (apiKey.isBlank()) return@withContext AppResult.Failure("no api key")
 
         // Step 2: a stuck queue must not burn the whole quota in one afternoon
-        if (isDailyCapReached()) {
-            Log.w(TAG, "daily call cap reached")
-            return@withContext AppResult.Failure("daily cap")
-        }
+        if (isDailyCapReached()) return@withContext AppResult.Failure("daily cap")
 
         // Step 3: one POST, key in a header, schema inline
         val request = buildRequest(systemInstruction, userText, responseSchema)
         try {
             httpClient.newCall(request).execute().use { response ->
                 countCall()
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "call failed with http ${response.code}")
-                    return@withContext AppResult.Failure("http ${response.code}")
-                }
+                if (!response.isSuccessful) return@withContext AppResult.Failure("http ${response.code}")
                 val body = response.body?.string()
-                if (body.isNullOrBlank()) {
-                    Log.e(TAG, "call returned an empty body")
-                    return@withContext AppResult.Failure("empty body")
-                }
+                if (body.isNullOrBlank()) return@withContext AppResult.Failure("empty body")
                 return@withContext readGeneratedText(body)
             }
         } catch (error: IOException) {
-            Log.e(TAG, "call could not complete: ${error.javaClass.simpleName}")
-            return@withContext AppResult.Failure("network error")
+            return@withContext AppResult.Failure("network error: ${error.javaClass.simpleName}")
         }
     }
 
@@ -115,23 +101,16 @@ class GeminiClient(
     private fun readGeneratedText(responseBody: String): AppResult<String> {
         try {
             val candidates = json.parseToJsonElement(responseBody).jsonObject["candidates"]?.jsonArray
-            if (candidates.isNullOrEmpty()) {
-                Log.e(TAG, "response carried no candidates")
-                return AppResult.Failure("no candidates")
-            }
+            if (candidates.isNullOrEmpty()) return AppResult.Failure("no candidates")
             val text = candidates[0].jsonObject["content"]
                 ?.jsonObject?.get("parts")
                 ?.jsonArray?.get(0)
                 ?.jsonObject?.get("text")
                 ?.jsonPrimitive?.content
-            if (text == null) {
-                Log.e(TAG, "response carried no text part")
-                return AppResult.Failure("no text part")
-            }
+            if (text == null) return AppResult.Failure("no text part")
             return AppResult.Success(text)
         } catch (error: Exception) {
-            Log.e(TAG, "response shape was unexpected: ${error.javaClass.simpleName}")
-            return AppResult.Failure("bad response shape")
+            return AppResult.Failure("bad response shape: ${error.javaClass.simpleName}")
         }
     }
 }
