@@ -15,16 +15,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.aryan.expensetracker.feature.chat.ChatScreen
 import com.aryan.expensetracker.feature.onboarding.OnboardingScreen
 import com.aryan.expensetracker.feature.onboarding.hasRequiredPermissions
 import com.aryan.expensetracker.feature.transactions.TransactionsScreen
 
 object Routes {
     const val TRANSACTIONS: String = "transactions"
+    const val CHAT: String = "chat"
     const val ONBOARDING: String = "onboarding"
 }
 
-private val DESTINATIONS = listOf(Routes.TRANSACTIONS to "Transactions")
+private val DESTINATIONS = listOf(
+    Routes.TRANSACTIONS to "Transactions",
+    Routes.CHAT to "Chat",
+)
 
 @Composable
 fun AppNavHost() {
@@ -59,6 +64,7 @@ fun AppNavHost() {
             modifier = Modifier.padding(padding),
         ) {
             composable(Routes.TRANSACTIONS) { TransactionsScreen() }
+            composable(Routes.CHAT) { ChatScreen() }
             composable(Routes.ONBOARDING) {
                 OnboardingScreen(onDone = { finishOnboarding(navController) })
             }

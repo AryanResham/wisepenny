@@ -8,6 +8,8 @@ import androidx.room.withTransaction
 import com.aryan.expensetracker.BuildConfig
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.AppDatabase
+import com.aryan.expensetracker.core.llm.AgentTools
+import com.aryan.expensetracker.core.llm.GeminiAgent
 import com.aryan.expensetracker.core.llm.GeminiClient
 import com.aryan.expensetracker.core.llm.LlmClient
 import com.aryan.expensetracker.core.location.LocationProvider
@@ -92,6 +94,11 @@ class AppContainer(context: Context) {
     val autoTagger: AutoTagger = AutoTagger(payeeRuleDao, transactionDao)
 
     val databaseWriter: DatabaseWriter = DatabaseWriter { block -> database.withTransaction(block) }
+
+    // chat: the agent drives the tool loop, AgentTools runs the queries and the confirmed write
+    val agentTools: AgentTools = AgentTools(transactionDao, payeeRuleDao, json)
+    val geminiAgent: GeminiAgent = GeminiAgent(llmClient, json)
+    val hasGeminiKey: Boolean = BuildConfig.GEMINI_API_KEY.isNotBlank()
 
     val messagePipeline: MessagePipeline = MessagePipeline(
         transactionDao,

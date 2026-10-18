@@ -10,4 +10,11 @@ interface LlmClient {
         userText: String,
         responseSchema: String,
     ): AppResult<String>
+
+    // the function-calling call: transcript and tool declarations go out as json, the raw body comes back
+    suspend fun generateWithTools(
+        systemInstruction: String,
+        contentsJson: String,
+        toolsJson: String,
+    ): AppResult<String>
 }

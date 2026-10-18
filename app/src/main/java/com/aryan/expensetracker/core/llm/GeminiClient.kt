@@ -36,29 +36,45 @@ class GeminiClient(
         userText: String,
         responseSchema: String,
     ): AppResult<String> = withContext(Dispatchers.IO) {
-        // every failure below leaves as a reason; the pipeline is the one place that logs it
+        when (val body = post(schemaPayload(systemInstruction, userText, responseSchema))) {
+            is AppResult.Failure -> body
+            is AppResult.Success -> readGeneratedText(body.data)
+        }
+    }
+
+    // the agent parses the envelope itself, because a candidate part may be a call instead of text
+    override suspend fun generateWithTools(
+        systemInstruction: String,
+        contentsJson: String,
+        toolsJson: String,
+    ): AppResult<String> = withContext(Dispatchers.IO) {
+        post(toolPayload(systemInstruction, contentsJson, toolsJson))
+    }
+
+    // the one gate every call goes through: key, daily cap, pacing, then one POST
+    private suspend fun post(payload: String): AppResult<String> {
+        // every failure below leaves as a reason; the caller is the one place that logs it
         // Step 1: a missing secrets.properties must degrade, never crash
-        if (apiKey.isBlank()) return@withContext AppResult.Failure("no api key")
+        if (apiKey.isBlank()) return AppResult.Failure(AppConfig.LLM_REASON_NO_KEY)
 
         // Step 2: a stuck queue must not burn the whole quota in one afternoon
-        if (isDailyCapReached()) return@withContext AppResult.Failure(AppConfig.LLM_REASON_DAILY_CAP)
+        if (isDailyCapReached()) return AppResult.Failure(AppConfig.LLM_REASON_DAILY_CAP)
 
         // Step 3: space the calls out; the worker runs them back to back otherwise
         waitForGap()
 
-        // Step 4: one POST, key in a header, schema inline
-        val request = buildRequest(systemInstruction, userText, responseSchema)
+        // Step 4: one POST, key in a header
         try {
-            httpClient.newCall(request).execute().use { response ->
+            httpClient.newCall(buildRequest(payload)).execute().use { response ->
                 countCall()
-                if (isThrottled(response.code)) return@withContext AppResult.Failure(AppConfig.LLM_REASON_RATE_LIMITED)
-                if (!response.isSuccessful) return@withContext AppResult.Failure("http ${response.code}")
+                if (isThrottled(response.code)) return AppResult.Failure(AppConfig.LLM_REASON_RATE_LIMITED)
+                if (!response.isSuccessful) return AppResult.Failure("http ${response.code}")
                 val body = response.body?.string()
-                if (body.isNullOrBlank()) return@withContext AppResult.Failure("empty body")
-                return@withContext readGeneratedText(body)
+                if (body.isNullOrBlank()) return AppResult.Failure("empty body")
+                return AppResult.Success(body)
             }
         } catch (error: IOException) {
-            return@withContext AppResult.Failure("network error: ${error.javaClass.simpleName}")
+            return AppResult.Failure("network error: ${error.javaClass.simpleName}")
         }
     }
 
@@ -91,13 +107,18 @@ class GeminiClient(
 
     private fun today(): String = LocalDate.now(ZoneId.of(AppConfig.BANK_TIME_ZONE)).toString()
 
+    private fun buildRequest(payload: String): Request = Request.Builder()
+        .url(AppConfig.GEMINI_ENDPOINT.format(AppConfig.GEMINI_MODEL))
+        .addHeader("x-goog-api-key", apiKey)
+        .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+        .build()
+
     // encodeToString escapes both texts, so quotes in a message cannot break the payload
-    private fun buildRequest(
+    private fun schemaPayload(
         systemInstruction: String,
         userText: String,
         responseSchema: String,
-    ): Request {
-        val payload = """
+    ): String = """
         {
           "systemInstruction": { "parts": [ { "text": ${json.encodeToString(systemInstruction)} } ] },
           "contents": [ { "parts": [ { "text": ${json.encodeToString(userText)} } ] } ],
@@ -107,14 +128,21 @@ class GeminiClient(
             "responseSchema": $responseSchema
           }
         }
-        """.trimIndent()
+    """.trimIndent()
 
-        return Request.Builder()
-            .url(AppConfig.GEMINI_ENDPOINT.format(AppConfig.GEMINI_MODEL))
-            .addHeader("x-goog-api-key", apiKey)
-            .post(payload.toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-    }
+    // the function-calling shape: declarations under tools, the whole transcript under contents
+    private fun toolPayload(
+        systemInstruction: String,
+        contentsJson: String,
+        toolsJson: String,
+    ): String = """
+        {
+          "systemInstruction": { "parts": [ { "text": ${json.encodeToString(systemInstruction)} } ] },
+          "contents": $contentsJson,
+          "tools": $toolsJson,
+          "generationConfig": { "temperature": 0 }
+        }
+    """.trimIndent()
 
     // Step 5: dig the generated text out of the envelope; any other shape is a failure
     private fun readGeneratedText(responseBody: String): AppResult<String> {
