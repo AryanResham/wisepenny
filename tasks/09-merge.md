@@ -65,12 +65,22 @@ Both break multi-turn chat, which is the whole feature. Each needs a test.
 While you are in there: `ChatScreen` disables the input when there is no API key, making the
 `NO_KEY_LINE` branch unreachable. Keep the empty state, drop the dead branch.
 
-## Two UI fixes carried over from task 07
+## Fixes carried over from task 07
 
-1. **The month hero number must not carry a minus sign.** It renders through
-   `formatPaise(spent, DEBIT)` today, so the headline reads `-₹21,082`. A spending total is positive
-   by definition - the label already says "spent". Add a formatter for a bare total
-   (`formatPaisePlain`) and use it for the header. Row-level amounts keep their signs and colours.
+1. **Untagging does not unlearn.** `TransactionsViewModel` skips `learnPayees` when the tag is
+   cleared, so the old payee rule survives and `AutoTagger` re-applies it to the next message from
+   that payee - the user's untag silently undoes itself. Clearing a tag must delete that payee's rule.
+   Test: tag a payee, clear it, a new transaction from that payee arrives untagged.
+2. **The month hero number must not carry a minus sign, and needs a label.** It renders through
+   `formatPaise(spent, DEBIT)`, so the headline reads `-₹21,082` - a spending total is a magnitude,
+   not a negative balance. Add `formatPaisePlain` for bare totals and use it in the header. Put a
+   quiet "spent" label next to it so a first-time user knows what the biggest number on screen means.
+   Row-level amounts keep their signs and colours. Also make debit rows plain and credit rows `+`,
+   as the task 07 spec asked.
+3. **Escape LIKE wildcards in search.** `observeSearch` passes the query straight into a `LIKE`,
+   so typing `%` matches every row. Escape `%` and `_` before binding.
+4. `TransactionsScreen` has a 107-line composable. Extract the snackbar effect and the two sheet
+   blocks; RULEBOOK §4 wants 10-40.
 2. **Real icons.** material3 1.4.0 no longer pulls the icon set, so the month arrows are `‹` / `›`
    text glyphs. Add `androidx.compose.material:material-icons-core` (version from the Compose BOM,
    no explicit version) and use `Icons.Default.ChevronLeft` / `ChevronRight` / `Close`. This is the
