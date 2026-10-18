@@ -4,9 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aryan.expensetracker.core.AppContainer
-import com.aryan.expensetracker.core.db.entity.CategoryEntity
+import com.aryan.expensetracker.core.db.entity.PayeeRuleEntity
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
-import com.aryan.expensetracker.feature.common.rememberMerchant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,9 +20,6 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
     val transactions: StateFlow<List<TransactionEntity>> = container.transactionDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val categories: StateFlow<List<CategoryEntity>> = container.categoryDao.observeAll()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     val pendingCount: StateFlow<Int> = container.pendingMessageDao.observeCount()
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
@@ -35,19 +31,17 @@ class TransactionsViewModel(private val container: AppContainer) : ViewModel() {
         mutableLastSeenSmsAt.value = container.appPrefs.getLastSeenSmsAt()
     }
 
-    // a correction here teaches the same merchant rule the review screen writes
-    fun changeCategory(transaction: TransactionEntity, categoryId: Long) {
+    // the learning loop: after this write the payee is never auto-tagged or asked about again
+    fun changeTag(transaction: TransactionEntity, tag: String) {
         viewModelScope.launch {
             try {
-                container.transactionDao.update(transaction.copy(categoryId = categoryId))
-                rememberMerchant(
-                    container.merchantRuleDao,
-                    transaction.merchantNormalized,
-                    transaction.direction,
-                    categoryId,
+                container.transactionDao.update(transaction.copy(tag = tag))
+                if (transaction.payeeNormalized.isBlank()) return@launch
+                container.payeeRuleDao.upsert(
+                    PayeeRuleEntity(transaction.payeeNormalized, tag, System.currentTimeMillis())
                 )
             } catch (error: Exception) {
-                Log.e(TAG, "category change failed: ${error.javaClass.simpleName}")
+                Log.e(TAG, "tag change failed: ${error.javaClass.simpleName}")
             }
         }
     }

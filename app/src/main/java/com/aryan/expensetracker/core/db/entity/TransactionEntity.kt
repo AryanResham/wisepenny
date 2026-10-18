@@ -9,25 +9,30 @@ import androidx.room.PrimaryKey
     indices = [
         Index("referenceNumber"),
         Index(value = ["messageHash"], unique = true),
+        Index("occurredAt"),
+        Index("payeeNormalized"),
+        Index("tag"),
     ],
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val amountPaise: Long,
     val direction: String,
-    val merchantRaw: String,
-    val merchantNormalized: String,
-    val categoryId: Long?,
-    val referenceNumber: String?,
-    val accountTail: String?,
+    val payeeRaw: String,
+    val payeeNormalized: String,
+    // one of AppConfig.TAGS, or null; untagged is a normal resting state and nothing nags
+    val tag: String?,
+    val description: String?,
     val occurredAt: Long,
     val capturedAt: Long,
+    val referenceNumber: String?,
+    val accountTail: String?,
     val source: String,
-    val needsReview: Boolean,
-    val reviewReason: String?,
-    val messageHash: String,
-    // kept on device so the review screen can show what actually arrived; never logged
-    val rawMessage: String,
+    val templateId: String?,
+    val placeFromMessage: String?,
     val latitude: Double?,
     val longitude: Double?,
+    // kept on device so a row can be checked against what actually arrived; never logged
+    val rawMessage: String,
+    val messageHash: String,
 )

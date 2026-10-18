@@ -25,6 +25,11 @@ Do not expand abbreviations, do not strip suffixes, do not tidy spacing, do not 
 occurredOn is the transaction date as YYYY-MM-DD, or null when the message does not state one.
 """
 
+// counts how often the templates came up short; a sudden rise means HDFC changed a format
+fun interface FallbackCounter {
+    fun recordLlmFallback()
+}
+
 @Serializable
 private data class ExtractionJson(
     val isTransaction: Boolean,
@@ -36,10 +41,15 @@ private data class ExtractionJson(
     val occurredOn: String? = null,
 )
 
-class LlmExtractor(private val llmClient: LlmClient, private val json: Json) {
+class LlmFallbackExtractor(
+    private val llmClient: LlmClient,
+    private val json: Json,
+    private val fallbackCounter: FallbackCounter,
+) {
 
-    // turns one message body into a draft; every failure comes back as a reason for the caller to log
+    // the safety net behind the templates; every failure comes back as a reason for the caller to log
     suspend fun extract(body: String, receivedAt: Long): ExtractionOutcome {
+        fallbackCounter.recordLlmFallback()
         val response = llmClient.generateJson(SYSTEM_INSTRUCTION, body, GeminiSchemas.EXTRACTION)
         val responseText = when (response) {
             is AppResult.Failure -> return ExtractionOutcome.Failed(response.reason)
@@ -70,21 +80,23 @@ class LlmExtractor(private val llmClient: LlmClient, private val json: Json) {
     private fun toDraft(parsed: ExtractionJson, receivedAt: Long): TransactionDraft? {
         val amountPaise = parseAmountToPaise(parsed.amount ?: return null) ?: return null
         val direction = parsed.direction ?: return null
-        val merchant = parsed.merchant ?: return null
-        if (merchant.isBlank()) return null
+        val payee = parsed.merchant ?: return null
+        if (payee.isBlank()) return null
 
         return TransactionDraft(
             amountPaise = amountPaise,
             direction = direction,
-            merchantRaw = merchant.trim(),
+            payeeRaw = payee.trim(),
             referenceNumber = parsed.referenceNumber,
             accountTail = parsed.accountTail?.takeLast(AppConfig.ACCOUNT_TAIL_LENGTH),
             occurredAt = parseBankDate(parsed.occurredOn, receivedAt),
-            source = AppConfig.RULE_SOURCE_LLM,
+            source = AppConfig.SOURCE_LLM,
+            templateId = null,
+            placeFromMessage = null,
         )
     }
 
-    // bank dates carry no zone, so they are read as IST; arrival time stands in when there is none
+    // model dates carry no zone, so they are read as IST; arrival time stands in when there is none
     private fun parseBankDate(isoDate: String?, receivedAt: Long): Long {
         if (isoDate.isNullOrBlank()) return receivedAt
         return try {

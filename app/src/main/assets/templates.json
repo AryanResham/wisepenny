@@ -1,0 +1,45 @@
+{
+  "templates": [
+    {
+      "id": "upi_sent",
+      "direction": "DEBIT",
+      "pattern": "(?i)^(?:Amt\\s+)?Sent\\s+Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+From\\s+HDFC\\s+Bank\\s+A/C\\s+(?<acct>[\\w*]+)\\s+To\\s+(?<payee>.+?)\\s+On\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+Ref\\s+(?<ref>\\d+)"
+    },
+    {
+      "id": "upi_debit_vpa",
+      "direction": "DEBIT",
+      "pattern": "(?i)^HDFC\\s+Bank:\\s*Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+a/c\\s+(?<acct>[\\w*]+)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+to\\s+VPA\\s+(?<payee>.+?)\\s*\\(\\s*UPI\\s+Ref\\s+No\\s+(?<ref>\\d+)"
+    },
+    {
+      "id": "money_transfer",
+      "direction": "DEBIT",
+      "pattern": "(?i)^Money\\s+Transfer:\\s*Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+from\\s+HDFC\\s+Bank\\s+A/c\\s+(?<acct>[\\w*]+)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+to\\s+(?<payee>.+?)\\s+UPI:\\s*(?<ref>\\d+)"
+    },
+    {
+      "id": "upi_credit",
+      "direction": "CREDIT",
+      "pattern": "(?i)^HDFC\\s+Bank:\\s*Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+credited\\s+to\\s+a/c\\s+(?<acct>[\\w*]+)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+by\\s+a/c\\s+linked\\s+to\\s+VPA\\s+(?<payee>.+?)\\s*\\(\\s*UPI\\s+Ref\\s+No\\s+(?<ref>\\d+)"
+    },
+    {
+      "id": "credit_alert",
+      "direction": "CREDIT",
+      "pattern": "(?i)^Credit\\s+Alert!\\s*Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+credited\\s+to\\s+HDFC\\s+Bank\\s+A/c\\s+(?<acct>[\\w*]+)\\s+on\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+from\\s+VPA\\s+(?<payee>.+?)\\s*\\(\\s*UPI\\s+(?<ref>\\d+)"
+    },
+    {
+      "id": "upi_mandate",
+      "direction": "DEBIT",
+      "pattern": "(?i)^UPI\\s+Mandate:\\s*Sent\\s+Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+from\\s+HDFC\\s+Bank\\s+A/c\\s+(?<acct>[\\w*]+)\\s+To\\s+(?<payee>.+?)\\s+(?<date>\\d{1,2}[-/]\\d{1,2}(?:[-/]\\d{2,4})?)\\s+Ref\\s+(?<ref>\\d+)"
+    },
+    {
+      "id": "card_spent",
+      "direction": "DEBIT",
+      "pattern": "(?i)^Spent\\s+Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+From\\s+HDFC\\s+Bank\\s+Card\\s+(?<acct>[\\w*]+)\\s+At\\s+(?<payee>.+?)\\s+On\\s+(?<date>\\d{4}-\\d{2}-\\d{2})"
+    },
+    {
+      "id": "atm_withdrawal",
+      "direction": "DEBIT",
+      "fixedPayee": "ATM",
+      "pattern": "(?i)^You've\\s+withdrawn\\s+Rs\\.?\\s*(?<amount>[\\d,]+(?:\\.\\d{1,2})?)\\s+On\\s+HDFC\\s+Bank\\s+Debit\\s+Card\\s+(?<acct>[\\w*]+)\\s+At\\s+(?<place>.+?)\\s+On\\s+(?<date>\\d{4}-\\d{2}-\\d{2})"
+    }
+  ]
+}

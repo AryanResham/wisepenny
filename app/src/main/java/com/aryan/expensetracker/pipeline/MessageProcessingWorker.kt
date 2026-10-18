@@ -7,13 +7,11 @@ import androidx.work.WorkerParameters
 import com.aryan.expensetracker.core.ExpenseTrackerApp
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.PendingMessageEntity
-import com.aryan.expensetracker.core.db.entity.ReviewReason
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
 import com.aryan.expensetracker.feature.transactions.TransactionDao
 import com.aryan.expensetracker.pipeline.capture.PendingMessageDao
 
 private const val TAG = "MessageProcessingWorker"
-private const val STUB_MERCHANT = "Could not process"
 
 // what one pass over the queue left behind; the worker turns it into a WorkManager result
 data class DrainReport(
@@ -121,22 +119,23 @@ private suspend fun retryLater(
     return false
 }
 
-// stands in for the transaction we could not read, so the user sees it in Review instead of losing it
+// stands in for the transaction we could not read, so the user still sees it instead of losing it
 private fun stubTransaction(message: PendingMessageEntity): TransactionEntity = TransactionEntity(
     amountPaise = 0L,
     direction = AppConfig.DIRECTION_DEBIT,
-    merchantRaw = STUB_MERCHANT,
-    merchantNormalized = "",
-    categoryId = null,
-    referenceNumber = null,
-    accountTail = null,
+    payeeRaw = AppConfig.STUB_PAYEE,
+    payeeNormalized = "",
+    tag = null,
+    description = null,
     occurredAt = message.receivedAt,
     capturedAt = System.currentTimeMillis(),
-    source = AppConfig.RULE_SOURCE_LLM,
-    needsReview = true,
-    reviewReason = ReviewReason.COULD_NOT_PROCESS,
-    messageHash = message.messageHash,
-    rawMessage = message.body,
+    referenceNumber = null,
+    accountTail = null,
+    source = AppConfig.SOURCE_LLM,
+    templateId = null,
+    placeFromMessage = null,
     latitude = message.latitude,
     longitude = message.longitude,
+    rawMessage = message.body,
+    messageHash = message.messageHash,
 )

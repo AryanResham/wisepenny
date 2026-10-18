@@ -8,6 +8,7 @@ private const val KEY_LAST_SEEN_SMS_AT = "lastSeenSmsAt"
 private const val KEY_BACKFILL_DONE = "backfillDone"
 private const val KEY_LLM_CALLS_TODAY = "llmCallsToday"
 private const val KEY_LLM_CALLS_DATE = "llmCallsDate"
+private const val KEY_LLM_FALLBACK_COUNT = "llmFallbackCount"
 
 class AppPrefs(context: Context) {
 
@@ -36,5 +37,12 @@ class AppPrefs(context: Context) {
 
     fun setLlmCallsDate(date: String) {
         preferences.edit().putString(KEY_LLM_CALLS_DATE, date).apply()
+    }
+
+    fun getLlmFallbackCount(): Int = preferences.getInt(KEY_LLM_FALLBACK_COUNT, 0)
+
+    // a lifetime tally, never reset: a sudden rise is the warning that a bank format changed
+    fun incrementLlmFallbackCount() {
+        preferences.edit().putInt(KEY_LLM_FALLBACK_COUNT, getLlmFallbackCount() + 1).apply()
     }
 }
