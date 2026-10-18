@@ -44,6 +44,39 @@ load per chat message. Now that both branches are merged, do it properly:
 - Its existing tests must still pass. Where a test asserted in-memory filtering, update the fake DAO,
   not the assertion's intent.
 
+## Two conversation bugs carried over from task 08 - fix these FIRST
+
+Both break multi-turn chat, which is the whole feature. Each needs a test.
+
+1. **Dangling functionCall.** `ChatViewModel.showProposal` pushes the model's `proposeTags`
+   functionCall into `turns` but never appends a matching `functionResponse`. The next request
+   therefore carries a `functionCall` with no response, which v1beta `generateContent` rejects with
+   a 400 - so the message after any proposal fails. Append a `functionResponse` for `proposeTags`
+   as soon as the card is shown, carrying the outcome (`{"status":"awaiting_confirmation"}`), and
+   update it to confirmed/cancelled when the user acts.
+   Test: after a proposal, the next outgoing request has a functionResponse for every functionCall.
+
+2. **The model never sees its own replies.** `AgentStep.Reply` is appended to the visible message
+   list but never to `turns`, so the transcript holds consecutive `user` roles and follow-ups lose
+   context ("how much on food last month" -> answer -> "what about travel?" has no idea what
+   "what about" refers to). Append each assistant reply to `turns` as a `model` role turn.
+   Test: a second question's request contains the first answer as a model turn.
+
+While you are in there: `ChatScreen` disables the input when there is no API key, making the
+`NO_KEY_LINE` branch unreachable. Keep the empty state, drop the dead branch.
+
+## Two UI fixes carried over from task 07
+
+1. **The month hero number must not carry a minus sign.** It renders through
+   `formatPaise(spent, DEBIT)` today, so the headline reads `-₹21,082`. A spending total is positive
+   by definition - the label already says "spent". Add a formatter for a bare total
+   (`formatPaisePlain`) and use it for the header. Row-level amounts keep their signs and colours.
+2. **Real icons.** material3 1.4.0 no longer pulls the icon set, so the month arrows are `‹` / `›`
+   text glyphs. Add `androidx.compose.material:material-icons-core` (version from the Compose BOM,
+   no explicit version) and use `Icons.Default.ChevronLeft` / `ChevronRight` / `Close`. This is the
+   one dependency addition this task is allowed to make - the no-new-dependencies rule exists to
+   block frameworks, not the standard icon set. Keep the `contentDescription`s already there.
+
 ## Navigation
 
 Two tabs, bottom bar: **Transactions** and **Chat**. Transactions is the start destination when
