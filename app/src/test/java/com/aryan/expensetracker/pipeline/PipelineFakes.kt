@@ -35,6 +35,35 @@ class FakeTransactionDao : TransactionDao {
 
     override fun observeAll(): Flow<List<TransactionEntity>> = flowOf(rows)
 
+    override fun observeBetween(from: Long, to: Long): Flow<List<TransactionEntity>> =
+        flowOf(rows.filter { it.occurredAt >= from && it.occurredAt < to })
+
+    override fun observeSearch(query: String): Flow<List<TransactionEntity>> = flowOf(
+        rows.filter {
+            it.payeeRaw.contains(query, ignoreCase = true) ||
+                it.description.orEmpty().contains(query, ignoreCase = true)
+        }
+    )
+
+    override fun observeTotalCount(): Flow<Int> = flowOf(rows.size)
+
+    override suspend fun setTag(ids: List<Long>, tag: String?, description: String?) {
+        replaceWhere(ids) { it.copy(tag = tag, description = description) }
+    }
+
+    override suspend fun setTagOnly(ids: List<Long>, tag: String) {
+        replaceWhere(ids) { it.copy(tag = tag) }
+    }
+
+    override suspend fun byIds(ids: List<Long>): List<TransactionEntity> =
+        rows.filter { ids.contains(it.id) }
+
+    private fun replaceWhere(ids: List<Long>, change: (TransactionEntity) -> TransactionEntity) {
+        for (index in rows.indices) {
+            if (ids.contains(rows[index].id)) rows[index] = change(rows[index])
+        }
+    }
+
     override suspend fun findByReference(
         reference: String,
         direction: String,
@@ -80,6 +109,10 @@ class FakePayeeRuleDao(rules: List<PayeeRuleEntity> = emptyList()) : PayeeRuleDa
 
     override suspend fun upsert(rule: PayeeRuleEntity) {
         stored[rule.payeeNormalized] = rule
+    }
+
+    override suspend fun deleteByPayee(payeeNormalized: String) {
+        stored.remove(payeeNormalized)
     }
 }
 

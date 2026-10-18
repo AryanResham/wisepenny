@@ -14,4 +14,8 @@ interface PayeeRuleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(rule: PayeeRuleEntity)
+
+    // undo of a tag write has to remove the rule that write created, not just the tag
+    @Query("DELETE FROM payee_rules WHERE payeeNormalized = :payeeNormalized")
+    suspend fun deleteByPayee(payeeNormalized: String)
 }
