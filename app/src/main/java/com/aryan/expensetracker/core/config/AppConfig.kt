@@ -95,6 +95,9 @@ object AppConfig {
     const val PROCESSED_IGNORED: String = "IGNORED"
     const val PROCESSED_SUPERSEDED: String = "SUPERSEDED"
 
+    // the detail sheet shows this much of the bank's text before asking the user to expand it
+    const val RAW_MESSAGE_COLLAPSED_LINES: Int = 4
+
     const val CURRENCY_SYMBOL: String = "₹"
     const val PAISE_PER_RUPEE: Int = 100
     const val MONEY_DECIMAL_PLACES: Int = 2
