@@ -17,7 +17,7 @@ object AppConfig {
     // bank timestamps carry no zone; HDFC sends IST
     const val BANK_TIME_ZONE: String = "Asia/Kolkata"
 
-    const val GEMINI_MODEL: String = "gemini-2.5-flash"
+    const val GEMINI_MODEL: String = "gemini-3.6-flash"
     const val GEMINI_ENDPOINT: String =
         "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
     const val GEMINI_TIMEOUT_SECONDS: Long = 30
@@ -28,7 +28,14 @@ object AppConfig {
 
     const val WORKER_BACKOFF_SECONDS: Long = 30
 
-    const val MAX_LLM_CALLS_PER_DAY: Int = 200
+    const val MAX_LLM_CALLS_PER_DAY: Int = 1000
+
+    // gap between model calls so a big backfill cannot trip google's per-minute limit
+    const val LLM_MIN_GAP_MS: Long = 1500
+
+    // the model said slow down, or the day's quota is spent; both mean wait, not fail
+    const val LLM_REASON_RATE_LIMITED: String = "rate limited"
+    const val LLM_REASON_DAILY_CAP: String = "daily cap"
 
     const val BACKFILL_DAYS: Int = 90
 

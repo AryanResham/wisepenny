@@ -196,6 +196,17 @@ class MessagePipelineTest {
     }
 
     @Test
+    fun aRateLimitIsAWaitNotAFailure() = runTest {
+        val client = FakeLlmClient(AppResult.Failure(AppConfig.LLM_REASON_RATE_LIMITED))
+
+        val outcome = pipelineWith(client).process(message())
+
+        assertEquals(PipelineOutcome.WaitForQuota, outcome)
+        assertTrue(transactionDao.rows.isEmpty())
+        assertTrue(processedMessageDao.records.isEmpty())
+    }
+
+    @Test
     fun rejectsADirectionTheModelInvented() = runTest {
         val client = FakeLlmClient(
             AppResult.Success("""{"isTransaction":true,"amount":"10","direction":"debit","merchant":"SWIGGY"}""")

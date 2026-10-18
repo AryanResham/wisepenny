@@ -35,3 +35,20 @@ DASHBOARD (from design doc)
 
 ONBOARDING
 - Per-brand battery optimization guides (OnePlus, Xiaomi, Oppo) if this ever goes beyond personal use
+
+CONTACTS (added after seeing real data)
+- Match payee names against the phone's contact list
+- "AARYAN JAIDEEP KANERIA" -> show as "Aaryan" with the contact photo
+- Groups transfers by real person; makes the transfers view readable
+- Needs READ_CONTACTS. Solves naming, not categorization.
+
+WHAT THE REAL DATA SAID (3248 HDFC sms, Mar 2022 - Oct 2026)
+- 6 regex templates extract 94% of real transactions, zero AI
+- 918 distinct payee strings, but 187 repeat = 74% of money
+- tag top 50 payees -> 66% of money; top 100 -> 78%; top 200 -> 88%
+- nameless paytm QR codes = 0.8% of spending -> location layer is NOT worth building yet
+- brand aliases are the real mess: SWIGGY has 14 spellings, ZERODHA 6, AMAZON 6
+- sub-brands are distinguishable in the text: SWIGGY INSTAMART != SWIGGY
+- contact names rarely match the bank's string: "AARYAN JAIDEEP KANERIA" is saved as
+  "Kaneria", "ATHARV SALIL DESHPANDE" as "pande". So match on any shared word OR substring,
+  show it as a suggestion, never as a fact. Low stakes: naming a vendor happens once.

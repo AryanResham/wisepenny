@@ -69,7 +69,7 @@ suspend fun drainQueue(
     var failed = 0
     var gaveUp = 0
 
-    for (message in queue) {
+    for ((index, message) in queue.withIndex()) {
         when (outcomeFor(messagePipeline, message)) {
             is PipelineOutcome.Saved -> {
                 pendingMessageDao.delete(message)
@@ -79,8 +79,11 @@ suspend fun drainQueue(
                 pendingMessageDao.delete(message)
                 ignored++
             }
-            // being offline is not a failed attempt, so attemptCount is deliberately left alone
-            PipelineOutcome.WaitForNetwork -> waiting++
+            // no network or no quota hits every message the same, so stop here and let backoff run
+            PipelineOutcome.WaitForNetwork, PipelineOutcome.WaitForQuota -> {
+                waiting = queue.size - index
+                break
+            }
             // the pipeline already logged why; here the message is only counted
             is PipelineOutcome.Failed -> {
                 if (retryLater(pendingMessageDao, transactionDao, message)) failed++ else gaveUp++

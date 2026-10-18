@@ -5,3 +5,7 @@ build/
 .idea/
 *.iml
 .kotlin/
+
+# real bank sms used as test fixtures - personal financial data, never commit
+app/src/test/resources/samples.json
+app/src/test/resources/*.json

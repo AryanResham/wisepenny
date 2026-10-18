@@ -71,6 +71,11 @@ class MessagePipeline(
                 return PipelineOutcome.Ignored("not a transaction")
             }
             is ExtractionOutcome.Failed -> {
+                // google asking us to slow down is not this message's fault, so it keeps its attempts
+                if (isQuotaReason(extraction.reason)) {
+                    Log.i(TAG, "message ${message.id} waiting on quota: ${extraction.reason}")
+                    return PipelineOutcome.WaitForQuota
+                }
                 Log.w(TAG, "message ${message.id} extraction failed: ${extraction.reason}")
                 return PipelineOutcome.Failed(extraction.reason)
             }
@@ -85,6 +90,9 @@ class MessagePipeline(
         Log.i(TAG, "message ${message.id} saved as transaction $transactionId")
         return PipelineOutcome.Saved(transactionId)
     }
+
+    private fun isQuotaReason(reason: String): Boolean =
+        reason == AppConfig.LLM_REASON_RATE_LIMITED || reason == AppConfig.LLM_REASON_DAILY_CAP
 
     // a learned rule wins; NEW_MERCHANT beats LLM_EXTRACTED beats NO_REFERENCE_NUMBER, one reason per row
     private suspend fun categorize(draft: TransactionDraft, messageId: Long): Categorization {

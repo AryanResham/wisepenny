@@ -65,6 +65,22 @@ class MessageProcessingWorkerTest {
         assertEquals(3, pendingMessageDao.queue.single().attemptCount)
     }
 
+    // one rate limit means every message behind it would get the same answer, so the drain stops
+    @Test
+    fun aRateLimitStopsTheDrainAndBurnsNoAttempts() = runTest {
+        val first = queued(attemptCount = 2)
+        val second = queued(attemptCount = 0).copy(id = 2L, messageHash = "hash-two", receivedAt = first.receivedAt + 1)
+        val pendingMessageDao = FakePendingMessageDao(listOf(first, second))
+        val client = FakeLlmClient(AppResult.Failure(AppConfig.LLM_REASON_RATE_LIMITED))
+
+        val report = drainQueue(pendingMessageDao, transactionDao, pipelineWith(client, isOnline = true))
+
+        assertEquals(2, report.waiting)
+        assertEquals(1, client.extractionCalls)
+        assertEquals(2, pendingMessageDao.queue.first { it.id == 1L }.attemptCount)
+        assertTrue(transactionDao.rows.isEmpty())
+    }
+
     @Test
     fun aFailureUnderTheCapCountsOneAttemptAndStaysQueued() = runTest {
         val pendingMessageDao = FakePendingMessageDao(listOf(queued(attemptCount = 0)))
