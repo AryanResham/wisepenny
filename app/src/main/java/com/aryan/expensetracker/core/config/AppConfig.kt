@@ -44,6 +44,16 @@ object AppConfig {
     // the model said slow down, or the day's quota is spent; both mean wait, not fail
     const val LLM_REASON_RATE_LIMITED: String = "rate limited"
     const val LLM_REASON_DAILY_CAP: String = "daily cap"
+    const val LLM_REASON_NO_KEY: String = "no api key"
+
+    // chat: the tool loop gives up after this many model turns so a looping model cannot spend the day
+    const val MAX_AGENT_STEPS: Int = 4
+
+    // the hard ceiling on rows that leave the device for one question
+    const val MAX_TOOL_ROWS: Int = 60
+
+    // how much of the conversation is replayed to the model; history is in memory only
+    const val CHAT_HISTORY_TURNS: Int = 20
 
     // regex does the work now, so importing the whole inbox costs nothing
     const val BACKFILL_DAYS: Int = 3650

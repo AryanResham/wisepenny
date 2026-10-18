@@ -27,6 +27,13 @@ class FakeLlmClient(private val extraction: AppResult<String>) : LlmClient {
         extractionCalls++
         return extraction
     }
+
+    // the pipeline never calls tools; chat has its own fake for that
+    override suspend fun generateWithTools(
+        systemInstruction: String,
+        contentsJson: String,
+        toolsJson: String,
+    ): AppResult<String> = AppResult.Failure("not used")
 }
 
 class FakeTransactionDao : TransactionDao {
