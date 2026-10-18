@@ -5,8 +5,38 @@ Read `RULEBOOK.md` first. Depends on task 06 (regex extraction + new data model)
 ## Goal
 
 One screen that shows the user their money and lets them tag it. This is the screen they open daily.
-Plain Material 3 but NOT ugly - spacing, hierarchy and alignment matter. A dense readable list,
-not a toy.
+
+## Design direction - read this before writing any composable
+
+A previous attempt was specced as "no design effort" and the result was rejected. Do not repeat that.
+The bar is: **a person opening this for the first time understands what they are looking at without
+being told, and it does not feel like a debug screen.**
+
+Not a design system, not animations for their own sake. Five concrete rules:
+
+1. **One thing dominates.** The month's total is the largest element on screen by a wide margin -
+   display-size, bold, high contrast. Everything else is quieter than it. The user's first glance
+   should land there with no effort.
+2. **Hierarchy through weight and colour, not boxes.** Avoid stacking Cards inside Cards. Rows are
+   separated by spacing and a hairline divider at most. The screen should read as one continuous
+   list, not a pile of containers.
+3. **Numbers line up.** Amounts are right-aligned with `FontFeature` tabular figures (or a monospace
+   digit style) so the column scans vertically. A ragged amount column is the single biggest thing
+   that makes a money app feel cheap.
+4. **Colour carries exactly one meaning: direction.** Credits get the positive accent, debits stay
+   the default text colour. Tags are neutral-toned chips. Do not colour-code tags - with 13 tags it
+   becomes confetti and means nothing.
+5. **Breathing room.** 16dp screen padding, 12-14dp vertical inside a row, 8dp between a payee and
+   its description. Dense is fine; cramped is not.
+
+Follow the device theme (`MaterialTheme` with dynamic colour where available, dark mode included).
+Every string and every colour comes from the theme - no hardcoded hex, no hardcoded `Color.Gray`.
+
+Touch targets are >= 48dp. Every icon-only button has a `contentDescription`.
+
+Empty states are written, never blank: no transactions this month -> "Nothing here for October."
+Search with no hits -> "No matches for 'swiggy'." First run with an empty database ->
+"Waiting for your first message."
 
 ## Screen
 

@@ -57,6 +57,23 @@ in task 07.
 
 A silently wrong tag is worse than an extra tap. There is no setting to skip this.
 
+## Design direction
+
+Same bar as task 07 - understandable at a glance, not a debug screen. Specifics for chat:
+
+- User messages right-aligned in a tinted bubble; assistant replies left-aligned as plain text on
+  the background, no bubble. Reads as a conversation, not two walls of boxes.
+- While a tool is running show one quiet line - "Looking through October..." - not a spinner with
+  no explanation. The user should always know why it is thinking.
+- The proposal card is the most important element on the screen when it appears: clearly bounded,
+  the tag and description legible at a glance, each row a checkbox line with amount and payee.
+  Confirm is the prominent button, Cancel is quiet text.
+- After confirming, the card stays in the history but goes flat and shows "Tagged 2 as Food" so the
+  conversation keeps a readable record of what was done.
+- Empty state with text, never blank: "Ask about your spending, or tell me what something was.
+  Try: 'how much on food last month'". Mention that history clears when the app closes.
+- Follow the device theme, dark mode included. No hardcoded colours.
+
 ## Files
 
 ```
