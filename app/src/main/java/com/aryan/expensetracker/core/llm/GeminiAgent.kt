@@ -77,6 +77,10 @@ class GeminiAgent(
         },
     )
 
+    // the reply joins the transcript as a model turn, or a follow-up has no answer to refer back to
+    fun modelReplyTurn(text: String): AgentTurn =
+        AgentTurn(ROLE_MODEL, buildJsonArray { add(buildJsonObject { put("text", text) }) })
+
     // the tool result goes back as a user turn carrying functionResponse, which is the rest shape
     fun toolResultTurn(name: String, responseJson: String): AgentTurn = AgentTurn(
         ROLE_USER,

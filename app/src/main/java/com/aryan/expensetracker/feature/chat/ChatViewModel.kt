@@ -31,6 +31,11 @@ private const val ROWS_GONE_LINE = "I could not find those transactions any more
 private const val NOTHING_PICKED = "Nothing tagged"
 private const val CANCELLED = "Cancelled"
 
+// what the proposeTags call reports back; v1beta rejects a request whose call has no response
+private const val STATUS_AWAITING = """{"status":"awaiting_confirmation"}"""
+private const val STATUS_CANCELLED = """{"status":"cancelled"}"""
+private const val STATUS_ROWS_GONE = """{"status":"rows_not_found"}"""
+
 class ChatViewModel(
     private val agent: GeminiAgent,
     private val tools: AgentTools,
@@ -45,6 +50,9 @@ class ChatViewModel(
 
     // the model-facing transcript, separate from the visible one: it also carries the tool steps
     private val turns = mutableListOf<AgentTurn>()
+
+    // the waiting functionResponse behind each card, so the user's answer can be written into it
+    private val proposalResponses = mutableMapOf<Long, AgentTurn>()
     private var nextMessageId = 1L
 
     fun onSend(text: String) {
@@ -55,15 +63,11 @@ class ChatViewModel(
         viewModelScope.launch { confirm(proposalId) }
     }
 
-    // Step 1: show the question; Step 2: no key means one line and no call; Step 3: run the tool loop
+    // Step 1: refuse what cannot be sent; Step 2: show the question; Step 3: run the tool loop
     suspend fun send(text: String) {
         val question = text.trim()
-        if (question.isEmpty() || mutableIsWorking.value) return
+        if (question.isEmpty() || mutableIsWorking.value || !hasApiKey) return
         append(ChatMessage.User(nextMessageId(), question))
-        if (!hasApiKey) {
-            append(ChatMessage.Assistant(nextMessageId(), NO_KEY_LINE))
-            return
-        }
         trimTurns()
         turns.add(agent.userTurn(question))
         mutableIsWorking.value = true
@@ -87,6 +91,7 @@ class ChatViewModel(
             }
             when (val action = (next as AppResult.Success).data) {
                 is AgentStep.Reply -> {
+                    turns.add(agent.modelReplyTurn(action.text))
                     append(ChatMessage.Assistant(nextMessageId(), action.text))
                     return
                 }
@@ -123,21 +128,39 @@ class ChatViewModel(
             emptyList()
         }
         if (rows.isEmpty()) {
+            answerProposalCall(STATUS_ROWS_GONE)
             append(ChatMessage.Assistant(nextMessageId(), ROWS_GONE_LINE))
             return
         }
         val cardRows = rows.map {
             ProposalRow(it.id, it.payeeRaw, formatPaise(it.amountPaise, it.direction))
         }
+        val proposalId = nextMessageId()
+        proposalResponses[proposalId] = answerProposalCall(STATUS_AWAITING)
         append(
             ChatMessage.Proposal(
-                id = nextMessageId(),
+                id = proposalId,
                 tag = action.tag,
                 description = action.description,
                 rows = cardRows,
                 ticked = cardRows.map { it.transactionId }.toSet(),
             )
         )
+    }
+
+    // the call is answered the moment the card appears; waiting for the tap would send a bare call
+    private fun answerProposalCall(statusJson: String): AgentTurn {
+        val turn = agent.toolResultTurn(TOOL_PROPOSE_TAGS, statusJson)
+        turns.add(turn)
+        return turn
+    }
+
+    // the answer replaces the waiting response in place, found by identity so a trim cannot misfire
+    private fun settleProposalCall(proposalId: Long, statusJson: String) {
+        val waiting = proposalResponses.remove(proposalId) ?: return
+        val index = turns.indexOfFirst { it === waiting }
+        if (index < 0) return
+        turns[index] = agent.toolResultTurn(TOOL_PROPOSE_TAGS, statusJson)
     }
 
     fun toggleRow(proposalId: Long, transactionId: Long) {
@@ -154,6 +177,7 @@ class ChatViewModel(
         if (proposal.outcome != null) return
         val ids = proposal.rows.map { it.transactionId }.filter { proposal.ticked.contains(it) }
         if (ids.isEmpty()) {
+            settleProposalCall(proposalId, STATUS_CANCELLED)
             replace(proposal.copy(outcome = NOTHING_PICKED))
             return
         }
@@ -164,12 +188,14 @@ class ChatViewModel(
             append(ChatMessage.Error(nextMessageId(), "Could not save that. Nothing was changed."))
             return
         }
+        settleProposalCall(proposalId, """{"status":"confirmed","tagged":$written}""")
         replace(proposal.copy(outcome = "Tagged $written as ${proposal.tag}"))
     }
 
     fun cancel(proposalId: Long) {
         val proposal = findProposal(proposalId) ?: return
         if (proposal.outcome != null) return
+        settleProposalCall(proposalId, STATUS_CANCELLED)
         replace(proposal.copy(outcome = CANCELLED))
     }
 

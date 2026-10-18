@@ -6,19 +6,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.money.formatPaise
+import com.aryan.expensetracker.core.money.formatPaisePlain
 import java.time.YearMonth
 
 data class MonthSummary(
@@ -49,13 +52,21 @@ fun MonthHeader(summary: MonthSummary, onMonthChange: (Int) -> Unit) {
             )
         }
 
-        // the month's spend is the one number the user opened the app for, so nothing competes with it
-        Text(
-            text = formatPaise(summary.spentPaise, AppConfig.DIRECTION_DEBIT),
-            style = tabularStyle(MaterialTheme.typography.displaySmall),
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        // the one number the user opened the app for: a bare magnitude, labelled so it reads as spend
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = formatPaisePlain(summary.spentPaise),
+                style = tabularStyle(MaterialTheme.typography.displaySmall),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "spent",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
+            )
+        }
 
         if (summary.receivedPaise > 0L) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -78,14 +89,12 @@ fun MonthHeader(summary: MonthSummary, onMonthChange: (Int) -> Unit) {
 // arrows are the only icon-only controls here, so each carries its own spoken label
 @Composable
 private fun MonthArrow(step: Int, isEnabled: Boolean, onMonthChange: (Int) -> Unit) {
-    val glyph = if (step < 0) "‹" else "›"
-    val label = if (step < 0) "Previous month" else "Next month"
-    IconButton(
-        onClick = { onMonthChange(step) },
-        enabled = isEnabled,
-        modifier = Modifier.semantics { contentDescription = label },
-    ) {
-        Text(text = glyph, style = MaterialTheme.typography.headlineSmall)
+    val isBack = step < 0
+    val icon = if (isBack) Icons.AutoMirrored.Filled.KeyboardArrowLeft
+    else Icons.AutoMirrored.Filled.KeyboardArrowRight
+    val label = if (isBack) "Previous month" else "Next month"
+    IconButton(onClick = { onMonthChange(step) }, enabled = isEnabled) {
+        Icon(imageVector = icon, contentDescription = label)
     }
 }
 

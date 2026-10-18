@@ -18,14 +18,4 @@ object GeminiSchemas {
       "required": ["isTransaction"]
     }
     """
-
-    const val CATEGORIZATION: String = """
-    {
-      "type": "object",
-      "properties": {
-        "category": { "type": "string", "nullable": true }
-      },
-      "required": ["category"]
-    }
-    """
 }

@@ -156,15 +156,68 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `a missing key answers in one line without calling the model`() = runTest {
+    fun `a missing key sends nothing, so the empty state is all the user sees`() = runTest {
         val client = ReplayingLlmClient(listOf(textBody("never sent")))
         val viewModel = buildViewModel(client, hasApiKey = false)
 
         viewModel.send("how much in october")
 
         assertEquals(0, client.sentContents.size)
-        assertEquals(NO_KEY_LINE, (viewModel.messages.value.last() as ChatMessage.Assistant).text)
+        assertTrue(viewModel.messages.value.isEmpty())
     }
+
+    // the bug this pins: a proposal left its functionCall unanswered and the next request 400'd
+    @Test
+    fun `every functionCall in a request has a matching functionResponse`() = runTest {
+        seedTwoRows()
+        val client = ReplayingLlmClient(
+            listOf(functionCallBody("proposeTags", PROPOSE_ARGS), textBody("Done."))
+        )
+        val viewModel = buildViewModel(client)
+        viewModel.send("dinner with indra yesterday")
+
+        viewModel.send("and how much in october")
+
+        val request = client.sentContents[1]
+        assertEquals(count(request, "functionCall"), count(request, "functionResponse"))
+        assertTrue(request.contains("awaiting_confirmation"))
+    }
+
+    @Test
+    fun `a confirmed proposal reports its outcome in the next request`() = runTest {
+        seedTwoRows()
+        val client = ReplayingLlmClient(
+            listOf(functionCallBody("proposeTags", PROPOSE_ARGS), textBody("Done."))
+        )
+        val viewModel = buildViewModel(client)
+        viewModel.send("dinner with indra yesterday")
+        viewModel.confirm((viewModel.messages.value.last() as ChatMessage.Proposal).id)
+
+        viewModel.send("and how much in october")
+
+        val request = client.sentContents[1]
+        assertTrue(request.contains("confirmed"))
+        assertFalse(request.contains("awaiting_confirmation"))
+    }
+
+    // the bug this pins: replies never reached the transcript, so "what about travel?" had no subject
+    @Test
+    fun `a second question carries the first answer as a model turn`() = runTest {
+        seedTwoRows()
+        val client = ReplayingLlmClient(
+            listOf(textBody("You spent 570 rupees on food."), textBody("And 120 on travel."))
+        )
+        val viewModel = buildViewModel(client)
+        viewModel.send("how much on food last month")
+
+        viewModel.send("what about travel")
+
+        val request = client.sentContents[1]
+        assertTrue(request.contains("You spent 570 rupees on food."))
+        assertEquals(1, count(request, "\"role\":\"model\""))
+    }
+
+    private fun count(text: String, part: String): Int = text.split(part).size - 1
 
     @Test
     fun `being offline or rate limited shows one plain line`() = runTest {

@@ -25,9 +25,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
-import com.aryan.expensetracker.core.money.formatPaise
 import com.aryan.expensetracker.feature.common.amountColor
 import com.aryan.expensetracker.feature.common.formatDateTime
+import com.aryan.expensetracker.feature.common.formatRowAmount
 import com.aryan.expensetracker.feature.common.tabularStyle
 
 // the detail sheet: everything known about one row, then the two fields that change it
@@ -48,7 +48,7 @@ fun TagSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = formatPaise(row.amountPaise, row.direction),
+                text = formatRowAmount(row.amountPaise, row.direction),
                 style = tabularStyle(MaterialTheme.typography.headlineMedium),
                 color = amountColor(row.direction),
             )

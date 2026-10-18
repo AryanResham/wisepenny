@@ -40,17 +40,32 @@ class FakeTransactionDao : TransactionDao {
     val rows: MutableList<TransactionEntity> = mutableListOf()
     private var nextId = 1L
 
-    override fun observeAll(): Flow<List<TransactionEntity>> = flowOf(rows)
-
     override fun observeBetween(from: Long, to: Long): Flow<List<TransactionEntity>> =
         flowOf(rows.filter { it.occurredAt >= from && it.occurredAt < to })
 
-    override fun observeSearch(query: String): Flow<List<TransactionEntity>> = flowOf(
-        rows.filter {
-            it.payeeRaw.contains(query, ignoreCase = true) ||
-                it.description.orEmpty().contains(query, ignoreCase = true)
-        }
-    )
+    override fun observeSearch(query: String): Flow<List<TransactionEntity>> =
+        flowOf(rows.filter { likeMatches(it, query) })
+
+    // mirrors findForAgent: an inclusive window, an optional exact tag, newest first, then the cap
+    override suspend fun findForAgent(
+        from: Long,
+        to: Long,
+        tag: String?,
+        limit: Int,
+    ): List<TransactionEntity> = rows
+        .filter { it.occurredAt in from..to && (tag == null || tag == it.tag) }
+        .sortedByDescending { it.occurredAt }
+        .take(limit)
+
+    override suspend fun searchForAgent(
+        query: String,
+        from: Long,
+        to: Long,
+        limit: Int,
+    ): List<TransactionEntity> = rows
+        .filter { likeMatches(it, query) && it.occurredAt in from..to }
+        .sortedByDescending { it.occurredAt }
+        .take(limit)
 
     override fun observeTotalCount(): Flow<Int> = flowOf(rows.size)
 
@@ -64,6 +79,13 @@ class FakeTransactionDao : TransactionDao {
 
     override suspend fun byIds(ids: List<Long>): List<TransactionEntity> =
         rows.filter { ids.contains(it.id) }
+
+    // stands in for LIKE ... ESCAPE '\': the escape marks are dropped and the rest matched literally
+    private fun likeMatches(row: TransactionEntity, query: String): Boolean {
+        val text = query.replace("\\", "")
+        return row.payeeRaw.contains(text, ignoreCase = true) ||
+            row.description.orEmpty().contains(text, ignoreCase = true)
+    }
 
     private fun replaceWhere(ids: List<Long>, change: (TransactionEntity) -> TransactionEntity) {
         for (index in rows.indices) {

@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -19,7 +23,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,24 +56,8 @@ private data class ListCallbacks(
 
 @Composable
 fun TransactionsScreen() {
-    val container = (LocalContext.current.applicationContext as ExpenseTrackerApp).container
-    val viewModel: TransactionsViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer {
-                TransactionsViewModel(
-                    container.transactionDao,
-                    container.payeeRuleDao,
-                    container.pendingMessageDao,
-                    container.appPrefs,
-                )
-            }
-        }
-    )
-    val rows by viewModel.rows.collectAsState()
-    val summary by viewModel.summary.collectAsState()
-    val query by viewModel.query.collectAsState()
+    val viewModel = rememberTransactionsViewModel()
     val selectedIds by viewModel.selectedIds.collectAsState()
-    val isDatabaseEmpty by viewModel.isDatabaseEmpty.collectAsState()
     val tagEvent by viewModel.tagEvent.collectAsState()
 
     var openedRow by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -84,18 +71,7 @@ fun TransactionsScreen() {
     }
 
     BackHandler(enabled = selectedIds.isNotEmpty()) { viewModel.clearSelection() }
-
-    // every tag write offers its own way back, and the offer expires with the snackbar
-    LaunchedEffect(tagEvent) {
-        val event = tagEvent ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = event.message,
-            actionLabel = "UNDO",
-            duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) viewModel.undoLastTag()
-        viewModel.clearTagEvent()
-    }
+    TagEventEffect(snackbarHostState, tagEvent, viewModel)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -109,55 +85,122 @@ fun TransactionsScreen() {
             }
         },
     ) { insets ->
-        Column(modifier = Modifier.fillMaxSize().padding(insets)) {
-            MonthHeader(summary, viewModel::changeMonth)
-            OutlinedTextField(
-                value = query,
-                onValueChange = viewModel::setQuery,
-                placeholder = { Text("Search payee or description") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            Box(modifier = Modifier.weight(1f)) {
-                if (rows.isEmpty()) {
-                    EmptyState(describeEmpty(query, formatMonthName(summary.month), isDatabaseEmpty))
-                } else {
-                    TransactionList(
-                        rows = rows,
-                        selectedIds = selectedIds,
-                        callbacks = ListCallbacks(
-                            onOpen = { row -> openedRow = row },
-                            onToggleSelection = viewModel::toggleSelection,
-                            onLongPress = viewModel::startSelection,
-                        ),
-                    )
-                }
+        MonthAndList(viewModel, Modifier.padding(insets)) { row -> openedRow = row }
+    }
+
+    RowSheet(openedRow, viewModel) { openedRow = null }
+    if (isBulkSheetOpen) {
+        BulkSheet(selectedIds.size, viewModel) { isBulkSheetOpen = false }
+    }
+}
+
+@Composable
+private fun rememberTransactionsViewModel(): TransactionsViewModel {
+    val container = (LocalContext.current.applicationContext as ExpenseTrackerApp).container
+    return viewModel(
+        factory = viewModelFactory {
+            initializer {
+                TransactionsViewModel(
+                    container.transactionDao,
+                    container.payeeRuleDao,
+                    container.pendingMessageDao,
+                    container.captureMark,
+                )
+            }
+        }
+    )
+}
+
+// the screen under the bars: which month, what to search, then the rows or why there are none
+@Composable
+private fun MonthAndList(
+    viewModel: TransactionsViewModel,
+    modifier: Modifier,
+    onOpen: (TransactionEntity) -> Unit,
+) {
+    val rows by viewModel.rows.collectAsState()
+    val summary by viewModel.summary.collectAsState()
+    val query by viewModel.query.collectAsState()
+    val selectedIds by viewModel.selectedIds.collectAsState()
+    val isDatabaseEmpty by viewModel.isDatabaseEmpty.collectAsState()
+
+    Column(modifier = modifier.fillMaxSize()) {
+        MonthHeader(summary, viewModel::changeMonth)
+        OutlinedTextField(
+            value = query,
+            onValueChange = viewModel::setQuery,
+            placeholder = { Text("Search payee or description") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        Box(modifier = Modifier.weight(1f)) {
+            if (rows.isEmpty()) {
+                EmptyState(describeEmpty(query, formatMonthName(summary.month), isDatabaseEmpty))
+            } else {
+                TransactionList(
+                    rows = rows,
+                    selectedIds = selectedIds,
+                    callbacks = ListCallbacks(
+                        onOpen = onOpen,
+                        onToggleSelection = viewModel::toggleSelection,
+                        onLongPress = viewModel::startSelection,
+                    ),
+                )
             }
         }
     }
+}
 
-    val opened = openedRow
-    if (opened != null) {
-        TagSheet(
-            row = opened,
-            onSave = { tag, description ->
-                viewModel.tagOne(opened, tag, description)
-                openedRow = null
-            },
-            onDismiss = { openedRow = null },
+// every tag write offers its own way back, and the offer expires with the snackbar
+@Composable
+private fun TagEventEffect(
+    hostState: SnackbarHostState,
+    event: TagEvent?,
+    viewModel: TransactionsViewModel,
+) {
+    LaunchedEffect(event) {
+        if (event == null) return@LaunchedEffect
+        val result = hostState.showSnackbar(
+            message = event.message,
+            actionLabel = "UNDO",
+            duration = SnackbarDuration.Short,
         )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoLastTag()
+        viewModel.clearTagEvent()
     }
+}
 
-    if (isBulkSheetOpen) {
-        BulkTagSheet(
-            selectedCount = selectedIds.size,
-            onPick = { tag ->
-                viewModel.tagSelected(tag)
-                isBulkSheetOpen = false
-            },
-            onDismiss = { isBulkSheetOpen = false },
-        )
-    }
+@Composable
+private fun RowSheet(
+    row: TransactionEntity?,
+    viewModel: TransactionsViewModel,
+    onClose: () -> Unit,
+) {
+    if (row == null) return
+    TagSheet(
+        row = row,
+        onSave = { tag, description ->
+            viewModel.tagOne(row, tag, description)
+            onClose()
+        },
+        onDismiss = onClose,
+    )
+}
+
+@Composable
+private fun BulkSheet(
+    selectedCount: Int,
+    viewModel: TransactionsViewModel,
+    onClose: () -> Unit,
+) {
+    BulkTagSheet(
+        selectedCount = selectedCount,
+        onPick = { tag ->
+            viewModel.tagSelected(tag)
+            onClose()
+        },
+        onDismiss = onClose,
+    )
 }
 
 // one continuous list: a quiet date header, then its rows, no card around either
@@ -213,21 +256,23 @@ private fun EmptyState(message: String) {
     }
 }
 
-// the bar that only exists in selection mode; Cancel stands in for the X, back works too
+// the bar that only exists in selection mode; the X leaves it, and so does back
 @Composable
 private fun SelectionBar(selectedCount: Int, onTag: () -> Unit, onCancel: () -> Unit) {
     Surface(tonalElevation = 3.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = onCancel) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = "Exit selection")
+            }
             Text(
                 text = "$selectedCount selected",
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-            TextButton(onClick = onCancel) { Text("Cancel") }
-            Button(onClick = onTag) { Text("Tag") }
+            Button(onClick = onTag, modifier = Modifier.padding(end = 8.dp)) { Text("Tag") }
         }
     }
 }

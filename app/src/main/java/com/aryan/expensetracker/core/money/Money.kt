@@ -25,8 +25,13 @@ fun parseAmountToPaise(text: String): Long? {
 // renders paise for display; the sign says which way the money moved
 fun formatPaise(paise: Long, direction: String): String {
     val sign = if (direction == AppConfig.DIRECTION_CREDIT) "+" else "-"
+    return "$sign${formatPaisePlain(paise)}"
+}
+
+// the same amount with no sign at all, for a total that is a magnitude rather than a balance
+fun formatPaisePlain(paise: Long): String {
     val rupees = BigDecimal(paise).abs()
         .divide(PAISE_PER_RUPEE)
         .setScale(AppConfig.MONEY_DECIMAL_PLACES, RoundingMode.HALF_UP)
-    return "$sign${AppConfig.CURRENCY_SYMBOL}${rupees.toPlainString()}"
+    return "${AppConfig.CURRENCY_SYMBOL}${rupees.toPlainString()}"
 }

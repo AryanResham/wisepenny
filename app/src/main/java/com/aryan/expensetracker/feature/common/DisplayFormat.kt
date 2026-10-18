@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import com.aryan.expensetracker.core.config.AppConfig
+import com.aryan.expensetracker.core.money.formatPaise
+import com.aryan.expensetracker.core.money.formatPaisePlain
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -54,6 +56,12 @@ fun describeLastSeen(epochMillis: Long): String {
 
 // tabular figures so the amount column scans vertically instead of wobbling from row to row
 fun tabularStyle(style: TextStyle): TextStyle = style.copy(fontFeatureSettings = "tnum")
+
+// a debit is the ordinary case and reads plain; only a credit is called out, with a sign and a colour
+fun formatRowAmount(paise: Long, direction: String): String {
+    if (direction == AppConfig.DIRECTION_CREDIT) return formatPaise(paise, direction)
+    return formatPaisePlain(paise)
+}
 
 // colour carries exactly one meaning: direction. credits take the accent, debits stay plain text
 @Composable

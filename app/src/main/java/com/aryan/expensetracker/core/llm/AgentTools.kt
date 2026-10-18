@@ -11,7 +11,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeParseException
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -64,6 +63,15 @@ val TOOL_DECLARATIONS: String = """
 ]
 """.trimIndent()
 
+// what one findTransactions call asks for, with the open ends of its window already filled in
+private data class FindRequest(
+    val fromMillis: Long,
+    val toMillis: Long,
+    val search: String?,
+    val tag: String?,
+    val limit: Int,
+)
+
 // runs the model's tool calls against the local database; nothing here writes without a confirmed tap
 class AgentTools(
     private val transactionDao: TransactionDao,
@@ -82,8 +90,15 @@ class AgentTools(
             return errorResponse("no filters given: ask for a date range, a search term or a tag")
         }
 
-        val rows = snapshot().filter { matches(it, dayStart(from), dayAfter(to), search, tag) }
-            .take(effectiveLimit(arguments))
+        val rows = queryRows(
+            FindRequest(
+                fromMillis = dayStart(from) ?: Long.MIN_VALUE,
+                toMillis = dayEnd(to) ?: Long.MAX_VALUE,
+                search = search,
+                tag = canonicalTag(tag),
+                limit = effectiveLimit(arguments),
+            )
+        )
         return json.encodeToString(
             buildJsonObject {
                 put("count", rows.size)
@@ -92,10 +107,25 @@ class AgentTools(
         )
     }
 
+    // sqlite does the filtering and the capping, so a question costs its own rows and no more
+    private suspend fun queryRows(request: FindRequest): List<TransactionEntity> {
+        if (request.search == null) {
+            return transactionDao.findForAgent(
+                request.fromMillis, request.toMillis, request.tag, request.limit
+            )
+        }
+        val found = transactionDao.searchForAgent(
+            request.search, request.fromMillis, request.toMillis, request.limit
+        )
+        // the search query carries no tag column, so a tag narrows its already-capped result
+        if (request.tag == null) return found
+        return found.filter { request.tag == it.tag }
+    }
+
     // the rows behind a proposal, so the card shows what the model actually picked out
     suspend fun rowsFor(ids: List<Long>): List<TransactionEntity> {
         if (ids.isEmpty()) return emptyList()
-        return snapshot().filter { ids.contains(it.id) }
+        return transactionDao.byIds(ids)
     }
 
     // the only write in chat, and it runs after the confirm tap: the tag, the note, and the learned rule
@@ -109,22 +139,10 @@ class AgentTools(
         return rows.size
     }
 
-    // rows arrive newest first from the dao, so one snapshot is all the ordering the tools need
-    private suspend fun snapshot(): List<TransactionEntity> = transactionDao.observeAll().first()
-
-    private fun matches(
-        row: TransactionEntity,
-        fromMillis: Long?,
-        toMillis: Long?,
-        search: String?,
-        tag: String?,
-    ): Boolean {
-        if (fromMillis != null && row.occurredAt < fromMillis) return false
-        if (toMillis != null && row.occurredAt >= toMillis) return false
-        if (tag != null && !tag.equals(row.tag, ignoreCase = true)) return false
-        if (search == null) return true
-        return row.payeeRaw.contains(search, ignoreCase = true) ||
-            row.description.orEmpty().contains(search, ignoreCase = true)
+    // the tag column holds one of a fixed list, so the model's casing is matched to it before binding
+    private fun canonicalTag(tag: String?): String? {
+        if (tag == null) return null
+        return AppConfig.TAGS.firstOrNull { it.equals(tag, ignoreCase = true) } ?: tag
     }
 
     // the privacy line: id, date, rupees, payee, tag, description and nothing else ever leaves the phone
@@ -154,9 +172,9 @@ class AgentTools(
 
     private fun dayStart(date: String?): Long? = parseDay(date)?.atStartOfDay(zone)?.toInstant()?.toEpochMilli()
 
-    // "to" is inclusive to the user, so the cutoff is the start of the next day
-    private fun dayAfter(date: String?): Long? =
-        parseDay(date)?.plusDays(1)?.atStartOfDay(zone)?.toInstant()?.toEpochMilli()
+    // "to" is inclusive to the user and BETWEEN is inclusive too, so the bound is that day's last ms
+    private fun dayEnd(date: String?): Long? =
+        parseDay(date)?.plusDays(1)?.atStartOfDay(zone)?.toInstant()?.toEpochMilli()?.minus(1)
 
     private fun parseDay(date: String?): LocalDate? {
         if (date.isNullOrBlank()) return null

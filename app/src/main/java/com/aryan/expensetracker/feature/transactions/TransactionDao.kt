@@ -11,9 +11,6 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TransactionDao {
 
-    @Query("SELECT * FROM transactions ORDER BY occurredAt DESC")
-    fun observeAll(): Flow<List<TransactionEntity>>
-
     // the month window the screen browses; the upper bound is the next month's first instant
     @Query(
         "SELECT * FROM transactions WHERE occurredAt >= :from AND occurredAt < :to " +
@@ -21,12 +18,31 @@ interface TransactionDao {
     )
     fun observeBetween(from: Long, to: Long): Flow<List<TransactionEntity>>
 
-    // LIKE is case-insensitive for ascii, which is all a bank payee ever contains
+    // LIKE is case-insensitive for ascii; the caller escapes its own % and _ with a backslash first
     @Query(
-        "SELECT * FROM transactions WHERE payeeRaw LIKE '%' || :query || '%' " +
-            "OR description LIKE '%' || :query || '%' ORDER BY occurredAt DESC"
+        "SELECT * FROM transactions WHERE payeeRaw LIKE '%' || :query || '%' ESCAPE '\\' " +
+            "OR description LIKE '%' || :query || '%' ESCAPE '\\' ORDER BY occurredAt DESC"
     )
     fun observeSearch(query: String): Flow<List<TransactionEntity>>
+
+    // the chat tools filter in sqlite, so one question costs its own rows and never the whole table
+    @Query(
+        "SELECT * FROM transactions WHERE occurredAt BETWEEN :from AND :to " +
+            "AND (:tag IS NULL OR tag = :tag) ORDER BY occurredAt DESC LIMIT :limit"
+    )
+    suspend fun findForAgent(from: Long, to: Long, tag: String?, limit: Int): List<TransactionEntity>
+
+    @Query(
+        "SELECT * FROM transactions WHERE (payeeRaw LIKE '%' || :query || '%' " +
+            "OR description LIKE '%' || :query || '%') AND occurredAt BETWEEN :from AND :to " +
+            "ORDER BY occurredAt DESC LIMIT :limit"
+    )
+    suspend fun searchForAgent(
+        query: String,
+        from: Long,
+        to: Long,
+        limit: Int,
+    ): List<TransactionEntity>
 
     // tells the empty state apart: no rows this month, or no rows ever
     @Query("SELECT COUNT(*) FROM transactions")
@@ -39,7 +55,7 @@ interface TransactionDao {
     @Query("UPDATE transactions SET tag = :tag WHERE id IN (:ids)")
     suspend fun setTagOnly(ids: List<Long>, tag: String)
 
-    @Query("SELECT * FROM transactions WHERE id IN (:ids)")
+    @Query("SELECT * FROM transactions WHERE id IN (:ids) ORDER BY occurredAt DESC")
     suspend fun byIds(ids: List<Long>): List<TransactionEntity>
 
     // same-transaction check; direction is matched too so a refund never collapses into its payment

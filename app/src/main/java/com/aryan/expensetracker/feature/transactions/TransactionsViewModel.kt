@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.aryan.expensetracker.core.config.AppConfig
 import com.aryan.expensetracker.core.db.entity.PayeeRuleEntity
 import com.aryan.expensetracker.core.db.entity.TransactionEntity
-import com.aryan.expensetracker.core.prefs.AppPrefs
 import com.aryan.expensetracker.feature.common.MonthSummary
 import com.aryan.expensetracker.feature.common.monthStartMillis
 import com.aryan.expensetracker.pipeline.capture.PendingMessageDao
@@ -25,6 +24,9 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "TransactionsViewModel"
 
+// the character the search query's own wildcards are escaped with, matching the DAO's ESCAPE clause
+private const val LIKE_ESCAPE = "\\"
+
 // what a tag write replaced, held in memory so undo costs no table and dies with the screen
 private data class TagUndo(
     val previousRows: List<TransactionEntity>,
@@ -34,12 +36,17 @@ private data class TagUndo(
 // the id makes two identical messages distinct, so the second snackbar is never swallowed
 data class TagEvent(val id: Long, val message: String)
 
+// where capture got to, read on demand because prefs are not reactive and a fake needs no context
+fun interface CaptureMark {
+    fun lastSeenSmsAt(): Long
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class TransactionsViewModel(
     private val transactionDao: TransactionDao,
     private val payeeRuleDao: PayeeRuleDao,
     private val pendingMessageDao: PendingMessageDao,
-    private val appPrefs: AppPrefs,
+    private val captureMark: CaptureMark,
 ) : ViewModel() {
 
     private val monthState = MutableStateFlow(YearMonth.now())
@@ -53,7 +60,7 @@ class TransactionsViewModel(
     private val tagEventState = MutableStateFlow<TagEvent?>(null)
     val tagEvent: StateFlow<TagEvent?> = tagEventState.asStateFlow()
 
-    private val lastSeenSmsAtState = MutableStateFlow(appPrefs.getLastSeenSmsAt())
+    private val lastSeenSmsAtState = MutableStateFlow(captureMark.lastSeenSmsAt())
 
     private var pendingUndo: TagUndo? = null
     private var tagEventCount = 0L
@@ -70,7 +77,7 @@ class TransactionsViewModel(
     // a search ignores the month on purpose: the user is hunting for one row, not browsing a window
     val rows: StateFlow<List<TransactionEntity>> = queryState
         .flatMapLatest { text ->
-            if (text.isBlank()) monthRows else transactionDao.observeSearch(text.trim())
+            if (text.isBlank()) monthRows else transactionDao.observeSearch(escapeForLike(text.trim()))
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -96,7 +103,7 @@ class TransactionsViewModel(
 
     // prefs are not reactive, so the capture mark is re-read whenever the screen comes forward
     fun refreshStatus() {
-        lastSeenSmsAtState.value = appPrefs.getLastSeenSmsAt()
+        lastSeenSmsAtState.value = captureMark.lastSeenSmsAt()
     }
 
     fun changeMonth(step: Int) {
@@ -132,7 +139,9 @@ class TransactionsViewModel(
                 val ids = listOf(row.id)
                 captureUndo(ids)
                 transactionDao.setTag(ids, tag, description)
-                if (tag != null) learnPayees(listOf(row.payeeNormalized), tag)
+                // clearing a tag has to delete the rule too, or AutoTagger puts it straight back
+                if (tag == null) forgetPayee(row.payeeNormalized)
+                else learnPayees(listOf(row.payeeNormalized), tag)
                 announceTagWrite(ids.size, tag)
             } catch (error: Exception) {
                 Log.e(TAG, "single tag write failed: ${error.javaClass.simpleName}")
@@ -193,6 +202,11 @@ class TransactionsViewModel(
         }
     }
 
+    private suspend fun forgetPayee(payeeNormalized: String) {
+        if (payeeNormalized.isBlank()) return
+        payeeRuleDao.deleteByPayee(payeeNormalized)
+    }
+
     private fun announceTagWrite(count: Int, tag: String?) {
         tagEventCount++
         if (tag == null) {
@@ -202,6 +216,12 @@ class TransactionsViewModel(
         val message = if (count == 1) "Tagged as $tag" else "Tagged $count as $tag"
         tagEventState.value = TagEvent(tagEventCount, message)
     }
+
+    // LIKE reads % and _ as wildcards, so a typed one is escaped and matched as the character it is
+    private fun escapeForLike(text: String): String = text
+        .replace(LIKE_ESCAPE, LIKE_ESCAPE + LIKE_ESCAPE)
+        .replace("%", LIKE_ESCAPE + "%")
+        .replace("_", LIKE_ESCAPE + "_")
 
     // totals come from the rows already on screen, so there is no SUM query to drift from them
     private fun sumByDirection(rows: List<TransactionEntity>, direction: String): Long {

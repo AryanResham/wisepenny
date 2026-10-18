@@ -16,6 +16,7 @@ import com.aryan.expensetracker.core.location.LocationProvider
 import com.aryan.expensetracker.core.net.AndroidNetworkChecker
 import com.aryan.expensetracker.core.net.NetworkChecker
 import com.aryan.expensetracker.core.prefs.AppPrefs
+import com.aryan.expensetracker.feature.transactions.CaptureMark
 import com.aryan.expensetracker.feature.transactions.TransactionDao
 import com.aryan.expensetracker.pipeline.DatabaseWriter
 import com.aryan.expensetracker.pipeline.MessagePipeline
@@ -62,6 +63,8 @@ class AppContainer(context: Context) {
     )
 
     val appPrefs: AppPrefs = AppPrefs(context)
+
+    val captureMark: CaptureMark = CaptureMark { appPrefs.getLastSeenSmsAt() }
 
     val bankMessageFilter: BankMessageFilter = BankMessageFilter()
 
