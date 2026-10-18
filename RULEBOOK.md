@@ -23,8 +23,14 @@ stores everything on the phone, and learns from the user's corrections.
 - Personal use, sideloaded. No Play Store rules apply. No per-brand battery guides.
 - SMS is read DIRECTLY (RECEIVE_SMS + READ_SMS). Not via a notification listener.
   On first launch, backfill from the SMS inbox. On every launch, catch up from the last seen SMS.
-- NO regex extraction templates. No rules.json. Gemini does all extraction.
-  The only local filter is: sender contains "HDFC" AND body contains a money word.
+- Extraction is HYBRID, and in this order: regex templates first, Gemini only for what they miss.
+  Measured on 3,248 real HDFC messages, eight templates read ~97% of transactions for free.
+  A regex miss must never drop a message - it falls through to the model, which is the safety net.
+  (This reverses an earlier "Gemini does everything" decision. The real corpus disproved it.)
+- The capture filter - sender contains "HDFC" AND body contains a money word - runs BEFORE the
+  queue, so anything it drops is lost permanently. Keep it loose and let the downstream
+  non-transaction filter do the real work. A tight gate here already cost 201 real transactions.
+- Templates live in `app/src/main/assets/templates.json`, never hardcoded in Kotlin.
 - Last-known device location is SAVED with every transaction. It is NOT sent to Gemini in v1.
 - Offline queue + WorkManager stays exactly as described in IMPLEMENTATION.md.
 - Money is paise in a Long. Always.
@@ -119,7 +125,8 @@ Verifier (a fresh agent that did not write the code):
 
 - Writing code outside the files your task lists.
 - Implementing anything from `ideas.txt`.
-- Regex extraction templates of any kind.
+- Hardcoding an extraction pattern in Kotlin. Templates belong in `templates.json`.
+- Tightening the capture filter so that a real transaction can be dropped before the queue.
 - Float or Double for money.
 - Logging message contents.
 - Adding a dependency not listed in section 4.

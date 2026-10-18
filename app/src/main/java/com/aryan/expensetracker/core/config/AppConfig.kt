@@ -5,8 +5,12 @@ object AppConfig {
     // only messages from a sender containing this word are ours; the first local gate
     const val BANK_SENDER_KEYWORD: String = "HDFC"
 
+    // deliberately loose: this gate is before the queue, so anything it drops is lost for good.
+    // "Money Transfer:Rs..." carries none of the verbs, which silently cost 201 real transactions.
+    // junk that slips past is free - NON_TRANSACTION_MARKERS catches it downstream.
     val MONEY_WORDS: List<String> = listOf(
         "debited", "credited", "sent", "paid", "spent", "withdrawn", "received",
+        "transfer", "upi", "a/c", "rs.",
     )
 
     const val MAX_MESSAGE_LENGTH: Int = 1000
